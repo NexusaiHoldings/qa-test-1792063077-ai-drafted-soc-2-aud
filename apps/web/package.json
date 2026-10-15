@@ -20,6 +20,7 @@
     "@types/pg": "^8.11.0",
     "pg": "^8.11.0",
     "@nexus/identity-and-access": "*",
+    "@nexus/memory-and-knowledge": "*",
     "@nexus/legal-and-compliance": "*",
     "@nexus/notifications": "*",
     "@nexus/billing-and-subscriptions": "*",
