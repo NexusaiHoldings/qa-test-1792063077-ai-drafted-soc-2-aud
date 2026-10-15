@@ -1,0 +1,9 @@
+lego_name: onboarding
+version: 1.0.0
+perception:
+  - event: onboarding.step_completed
+    workflow_implications: [suggest_next_onboarding_step]
+  - event: onboarding.stalled
+    workflow_implications: [detect_onboarding_dropoff, propose_reengagement]
+  - event: onboarding.completed
+    workflow_implications: [mark_activated]

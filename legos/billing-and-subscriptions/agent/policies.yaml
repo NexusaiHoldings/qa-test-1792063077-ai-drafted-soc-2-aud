@@ -1,0 +1,23 @@
+# Autonomy / approval policies for billing tools.
+# Spec: NEXUS_PORTFOLIO_RUNTIME_SPEC §5.8 (always_require_approval floor).
+
+policies:
+  predict_churn_risk:
+    autonomy_floor: none
+    notes: Read-only analysis. Safe at full agent autonomy.
+
+  summarize_invoice_for_customer:
+    autonomy_floor: none
+    notes: Read-only summary. Customer-facing output should be reviewed for tone.
+
+  recommend_tier_change:
+    autonomy_floor: notify
+    notes: >
+      Suggesting a tier change is user-impacting. Always notify before
+      surfacing as recommendation. Actual tier change is a separate
+      user-confirmed action (4.2 customer portal flow).
+
+# Note: actual subscription-modifying actions (cancel, upgrade, downgrade,
+# proration, refund) live in API endpoints that require explicit user
+# attestation per spec §8 liability_boundary. Agents do NOT call those
+# endpoints directly in v1.

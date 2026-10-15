@@ -1,0 +1,10 @@
+{
+  "lego_name": "files-and-media",
+  "version": "1.0.0",
+  "description": "Typed event definitions for the files-and-media lego (spec §7.6).",
+  "events": [
+    { "name": "file.uploaded", "required": ["file_id"], "properties": { "file_id": "uuid", "mime_type": "string" } },
+    { "name": "file.scan_completed", "required": ["file_id"], "properties": { "file_id": "uuid", "scan_status": "string" } },
+    { "name": "file.quarantined", "required": ["file_id"], "properties": { "file_id": "uuid", "reason": "string" } }
+  ]
+}

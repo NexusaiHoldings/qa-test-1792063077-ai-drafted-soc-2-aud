@@ -1,0 +1,9 @@
+lego_name: social-and-engagement
+version: 1.0.0
+perception:
+  - event: comment.posted
+    workflow_implications: [moderate_comment]
+  - event: engagement.spike
+    workflow_implications: [detect_spam_engagement]
+  - event: referral.converted
+    workflow_implications: [suggest_referral_reward]

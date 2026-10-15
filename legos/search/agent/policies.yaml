@@ -1,0 +1,15 @@
+lego_name: search
+version: 1.0.0
+policies:
+  - tool: rank_search_results
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only re-ranking. No mutation.
+  - tool: suggest_search_refinement
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only suggestions. No mutation.
+  - tool: summarize_search_intent
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only intent classification. No mutation.

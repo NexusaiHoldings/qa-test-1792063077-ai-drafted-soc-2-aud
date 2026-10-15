@@ -1,0 +1,10 @@
+{
+  "lego_name": "organizations-and-teams",
+  "version": "1.0.0",
+  "description": "Typed event definitions for the organizations-and-teams lego (spec §7.6).",
+  "events": [
+    { "name": "org.member_invited", "required": ["org_id", "email"], "properties": { "org_id": "uuid", "email": "string", "role": "string" } },
+    { "name": "org.member_joined", "required": ["org_id", "user_id"], "properties": { "org_id": "uuid", "user_id": "uuid", "role": "string" } },
+    { "name": "org.member_role_changed", "required": ["org_id", "user_id", "role"], "properties": { "org_id": "uuid", "user_id": "uuid", "role": "string" } }
+  ]
+}

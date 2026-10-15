@@ -1,0 +1,23 @@
+{
+  "name": "portfolio-substrate",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Portfolio company substrate — copied per company at provision time. Do NOT edit per-company; substrate changes ship via substrate-template sprint.",
+  "packageManager": "npm@10.9.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "legos/*"
+  ],
+  "scripts": {
+    "build": "turbo run build --filter=web",
+    "dev": "turbo run dev --filter=web",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.0"
+  }
+}

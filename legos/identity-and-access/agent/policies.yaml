@@ -1,0 +1,72 @@
+# Autonomy and approval policies for identity-and-access agent tools.
+# Per spec §5.8: all tools start at the 'notify' floor.
+# Chairman can elevate individual tools to 'confirm' or 'execute' post-merge.
+lego_name: identity-and-access
+version: 1.0.0
+
+policies:
+  - tool: detect_suspicious_login
+    autonomy_floor: notify
+    approval_required: false
+    rationale: >
+      Detection only — no account mutations. Agent notifies the user of
+      suspicious activity but takes no action without explicit operator sign-off.
+
+  - tool: analyze_session_risk
+    autonomy_floor: notify
+    approval_required: false
+    rationale: >
+      Read-only analysis. Recommendations are surfaced to the operator;
+      the agent does not act on force_logout or similar destructive
+      recommendations without confirmation.
+
+  - tool: suggest_passkey_upgrade
+    autonomy_floor: notify
+    approval_required: false
+    rationale: >
+      Suggestion only. The agent surfaces the prompt recommendation via
+      the after_login_redirect slot. No account mutation or data write occurs.
+
+  - tool: score_password_strength
+    autonomy_floor: notify
+    approval_required: false
+    rationale: >
+      Read-only analysis; no account mutations. Score and weak-area list are
+      surfaced as UI feedback only.
+
+  - tool: detect_credential_stuffing
+    autonomy_floor: notify
+    approval_required: false
+    rationale: >
+      Detection only; no account mutations. Agent notifies the operator of
+      suspected stuffing but takes no blocking action without explicit sign-off.
+
+  - tool: recommend_mfa_method
+    autonomy_floor: notify
+    approval_required: false
+    rationale: >
+      Advisory recommendation only. The agent surfaces the suggestion to the
+      user; no method is enrolled without explicit user action.
+
+  - tool: recommend_session_revocation
+    autonomy_floor: confirm
+    approval_required: true
+    rationale: >
+      Recommendations to revoke sessions affect user access. Admin must explicitly
+      approve before any revocation endpoint is called. Agent surfaces the list
+      of recommended session ids; operator clicks confirm.
+
+  - tool: detect_account_takeover
+    autonomy_floor: notify
+    approval_required: false
+    rationale: >
+      Detection only. Agent notifies the user and operator of suspected takeover
+      indicators; no account mutations occur without explicit confirmation.
+
+  - tool: score_account_deletion_risk
+    autonomy_floor: notify
+    approval_required: false
+    rationale: >
+      Advisory risk scoring only. The deletion grace period proceeds automatically;
+      the score surfaces guidance for the operator to expedite, delay, or escalate
+      the deletion review — no autonomous action taken.

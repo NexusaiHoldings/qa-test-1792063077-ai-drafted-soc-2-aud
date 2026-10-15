@@ -1,0 +1,108 @@
+# Notifications lego — NEXUS_PORTFOLIO_RUNTIME_SPEC §11 capability #6
+name: notifications
+version: 0.1.0
+description: Transactional email (Resend), in-app inbox, web push, SMS (Twilio), preferences center. Subscribes to template-render events from other legos (Identity, Billing, etc.) and dispatches across the configured channels.
+maintainer: nexus-platform
+status: alpha
+compatibility:
+  min_runtime: 1.0.0
+  min_nexus_spec: 2.1.0
+depends_on:
+  - identity-and-access: ">=1.0.0"
+  - admin-console: ">=0.1.0"
+slots:
+  - name: email_layout_header
+    description: HTML injected at the top of every transactional email (logo, brand banner).
+    contract: react-component
+  - name: email_layout_footer
+    description: HTML injected at the bottom of every transactional email (legal footer, unsubscribe link).
+    contract: react-component
+  - name: in_app_inbox_extra_actions
+    description: Per-row action buttons injected into the in-app inbox.
+    contract: react-component
+config_schema:
+  type: object
+  required:
+    - resend_from_email
+    - default_channels
+  properties:
+    resend_from_email:
+      type: string
+      description: Verified sender address for Resend (e.g. notifications@example.com).
+    default_channels:
+      type: array
+      default: [email, in_app]
+      description: Channels enabled by default for new users. User can opt out per-channel via /api/notifications/preferences.
+      items:
+        type: string
+        enum: [email, in_app, web_push, sms]
+    twilio_messaging_service_sid:
+      type: string
+      description: Optional Twilio Messaging Service SID. Required only if 'sms' is in default_channels.
+    web_push_vapid_public_key:
+      type: string
+      description: Optional VAPID public key for web push. Required only if 'web_push' in default_channels.
+    rate_limit_per_user_per_hour:
+      type: integer
+      minimum: 1
+      maximum: 1000
+      default: 30
+required_config: true
+runtime:
+  events:
+    subscribes_to:
+      - notifications.send_requested
+    emits:
+      - notifications.dispatched
+      - notifications.delivery_failed
+      - notifications.user_marked_read
+      - notifications.preferences_updated
+  permissions:
+    required_roles: []
+    feature_flags:
+      - notifications_enabled
+  experiments:
+    enabled: true
+    configurable: true
+  telemetry:
+    required_events:
+      - notification_dispatched
+      - notification_delivery_failed
+      - notification_opened
+      - notification_clicked
+      - preferences_updated
+  cost:
+    compute_profile: low
+    billable: true
+identity_constraints:
+  allowed_categories: ["*"]
+  restricted_use_cases: []
+adapters:
+  default: resend
+  supported: [resend, twilio]
+economics:
+  tracked_metrics:
+    - notifications_sent_count
+    - delivery_failure_rate
+    - open_rate
+    - click_rate
+env:
+  required:
+    - DATABASE_URL
+    - RESEND_API_KEY
+  optional:
+    - TWILIO_ACCOUNT_SID
+    - TWILIO_AUTH_TOKEN
+    - WEB_PUSH_VAPID_PRIVATE_KEY
+migrations:
+  required: true
+  reversible: false
+admin:
+  sections:
+    - name: Notifications
+      order: 50
+      permissions: [admin, owner]
+      routes:
+        - /admin/notifications
+        - /admin/notifications/log
+        - /admin/notifications/templates

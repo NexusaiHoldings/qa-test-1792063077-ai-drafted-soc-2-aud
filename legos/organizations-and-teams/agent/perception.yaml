@@ -1,0 +1,20 @@
+# State changes this lego emits — mapped to workflow state implications.
+lego_name: organizations-and-teams
+version: 1.0.0
+
+perception:
+  - event: org.member_invited
+    workflow_implications:
+      - track_invitation_expiry
+  - event: org.member_joined
+    workflow_implications:
+      - recommend_role_for_member
+      - update_seat_accounting
+  - event: org.member_role_changed
+    workflow_implications:
+      - flag_permission_anomaly
+      - record_audit_entry
+  - event: org.seat_limit_reached
+    workflow_implications:
+      - detect_unused_seats
+      - propose_seat_reclamation

@@ -1,0 +1,40 @@
+# Developer Surface lego — manifest.yaml
+# NEXUS_PORTFOLIO_RUNTIME_SPEC §11 capability #12 — developer-surface-buildout-001 (v1.0.0)
+name: developer-surface
+version: 1.0.0
+description: >
+  API keys, webhooks, rate limiting, sandbox, and request logging — the
+  developer-facing surface for portfolio products with an API. Agent tools
+  summarize usage, detect anomalous traffic, and recommend rate limits.
+  Ships schema + API + admin + agent tooling + UI.
+maintainer: nexus-platform
+status: beta
+compatibility:
+  min_runtime: 1.0.0
+  min_nexus_spec: 2.1.0
+depends_on:
+  - identity-and-access
+slots:
+  - name: api_keys_panel
+    description: API key management (create/rotate/revoke) for developers.
+    contract: react-component
+  - name: webhooks_panel
+    description: Webhook endpoint management + delivery status.
+    contract: react-component
+config_schema:
+  type: object
+  required:
+    - rate_limit
+  properties:
+    rate_limit:
+      type: object
+      properties:
+        default_rpm: { type: integer, default: 600 }
+        enforce: { type: boolean, default: true }
+    webhooks:
+      type: object
+      properties:
+        events:
+          type: array
+          items: { type: string }
+          default: [user.created, payment.succeeded]

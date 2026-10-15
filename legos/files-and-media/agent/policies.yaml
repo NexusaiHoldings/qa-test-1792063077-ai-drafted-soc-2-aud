@@ -1,0 +1,19 @@
+lego_name: files-and-media
+version: 1.0.0
+policies:
+  - tool: categorize_uploaded_file
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only categorization. No mutation.
+  - tool: extract_structured_data
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only extraction; persisted via API. No file mutation by the tool.
+  - tool: flag_anomaly_in_dataset
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only anomaly scan surfaced to the operator. No mutation.
+  - tool: quarantine_file
+    autonomy_floor: confirm
+    approval_required: true
+    rationale: Blocks access to a user's file; an operator approves the quarantine (confirm).

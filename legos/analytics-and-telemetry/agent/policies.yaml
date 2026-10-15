@@ -1,0 +1,19 @@
+lego_name: analytics-and-telemetry
+version: 1.0.0
+policies:
+  - tool: summarize_funnel_performance
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only funnel summary. No mutation.
+  - tool: detect_metric_anomaly
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only anomaly detection. No mutation.
+  - tool: recommend_event_to_track
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only instrumentation recommendation. No mutation.
+  - tool: explain_retention_drop
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only retention analysis. No mutation.

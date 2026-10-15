@@ -1,0 +1,9 @@
+# Autonomy / approval policies for notification tools.
+policies:
+  predict_send_time:
+    autonomy_floor: none
+  detect_engagement_decay:
+    autonomy_floor: none
+  rewrite_for_tone:
+    autonomy_floor: notify
+    notes: Surfacing a rewrite as suggestion; never auto-apply tone changes.

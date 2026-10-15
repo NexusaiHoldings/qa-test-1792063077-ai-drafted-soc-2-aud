@@ -1,0 +1,25 @@
+{
+  "name": "@nexus/memory-and-knowledge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Agent runtime memory tiers (working + long_term) + knowledge compiler. Pre-built portfolio substrate capability (16th lego, post-spec addition).",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./api/*": "./api/*.ts",
+    "./ui/*": "./ui/components/*.tsx"
+  },
+  "scripts": {
+    "build": "echo 'no build step — workspace package'",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "next": "^14.2.0",
+    "react": "^18.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0",
+    "typescript": "^5.4.0"
+  }
+}

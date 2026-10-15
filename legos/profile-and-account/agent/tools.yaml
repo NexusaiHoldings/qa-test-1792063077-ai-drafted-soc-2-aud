@@ -1,0 +1,103 @@
+# Agent-callable tools exported by the profile-and-account lego.
+# Per spec §5.7 — typed, costed, policy-tagged.
+lego_name: profile-and-account
+version: 1.0.0
+
+tools:
+  - name: suggest_profile_completion
+    description: >
+      Given a user's profile, identify missing/weak fields and suggest concrete
+      completions (e.g. "add a timezone", "write a one-line bio"). Returns a
+      completion score + prioritized suggestions. Read-only.
+    inputs:
+      type: object
+      required: [profile]
+      properties:
+        profile: { type: object, description: "{ display_name?, avatar_url?, bio?, timezone?, preferences? }" }
+        required_fields: { type: array, items: { type: string } }
+    outputs:
+      type: object
+      properties:
+        completion_score: { type: integer, minimum: 0, maximum: 100 }
+        suggestions:      { type: array, items: { type: string } }
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: { requests_per_minute: 120 }
+    cost_estimate: { llm_tokens: 300, provider_cost_usd: 0.0006, compute_profile: low }
+    failure_modes: [empty_profile]
+
+  - name: detect_stale_account
+    description: >
+      Evaluate whether an account is stale/at-risk based on last-active recency,
+      profile completeness, and connected-account count. Returns a staleness
+      score + a recommended re-engagement nudge. Read-only.
+    inputs:
+      type: object
+      required: [last_active_days, completion_score]
+      properties:
+        last_active_days:  { type: integer }
+        completion_score:  { type: integer }
+        connected_count:   { type: integer }
+    outputs:
+      type: object
+      properties:
+        is_stale:        { type: boolean }
+        staleness_score: { type: number, minimum: 0.0, maximum: 1.0 }
+        nudge:           { type: string }
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: { requests_per_minute: 120 }
+    cost_estimate: { llm_tokens: 250, provider_cost_usd: 0.0005, compute_profile: low }
+    failure_modes: [insufficient_data]
+
+  - name: summarize_connected_accounts
+    description: >
+      Summarize a user's connected providers + flag security observations
+      (e.g. only one provider → suggest a backup; an unused stale link →
+      suggest disconnect). Read-only.
+    inputs:
+      type: object
+      required: [connected_accounts]
+      properties:
+        connected_accounts: { type: array, items: { type: object } }
+    outputs:
+      type: object
+      properties:
+        summary:      { type: string }
+        observations: { type: array, items: { type: string } }
+    side_effects: false
+    idempotent: true
+    action_class: none
+    requires_approval: false
+    rate_limit: { requests_per_minute: 120 }
+    cost_estimate: { llm_tokens: 250, provider_cost_usd: 0.0005, compute_profile: low }
+    failure_modes: [no_accounts]
+
+  - name: request_account_export
+    description: >
+      Create a GDPR data-export request for a user (status=requested). A genuine
+      state mutation that kicks off an export job — gated behind confirm so the
+      user explicitly authorizes the export of their data.
+    inputs:
+      type: object
+      required: [user_id]
+      properties:
+        user_id: { type: string, format: uuid }
+        format:  { type: string, enum: [json, csv], default: json }
+    outputs:
+      type: object
+      properties:
+        export_id: { type: string, format: uuid }
+        status:    { type: string }
+    side_effects:
+      - writes: [account_export_requests]
+    idempotent: false
+    action_class: confirm
+    requires_approval: confirm
+    rate_limit: { requests_per_minute: 10 }
+    cost_estimate: { llm_tokens: 0, provider_cost_usd: 0.0, compute_profile: low }
+    failure_modes: [user_not_found, export_disabled]

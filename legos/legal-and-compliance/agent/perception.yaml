@@ -1,0 +1,27 @@
+# Legal & Compliance lego — agent perception declarations
+# Defines what the agent emits into the shared perception layer
+
+perception:
+  emit:
+    - event: legal_acknowledgment_completed
+      trigger: user successfully acknowledges a legal document
+      payload:
+        user_id: string
+        doc_type: string
+        version: string
+        jurisdiction: string
+
+    - event: legal_compliance_gap_detected
+      trigger: check_acknowledgment_compliance returns non_compliant for a user
+      payload:
+        user_id: string
+        missing_doc_types: array
+        jurisdiction: string
+
+    - event: regulated_disclosure_recommended
+      trigger: recommend_disclosure_addendum is called for regulated/fiduciary company
+      payload:
+        doc_type: string
+        liability_boundary_class: string
+        jurisdiction: string
+        requires_legal_review: boolean

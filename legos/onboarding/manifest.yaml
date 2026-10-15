@@ -1,0 +1,36 @@
+# Onboarding lego — manifest.yaml
+# NEXUS_PORTFOLIO_RUNTIME_SPEC §11 capability #9 — onboarding-buildout-001 (v1.0.0)
+name: onboarding
+version: 1.0.0
+description: >
+  Welcome flow, product tour, checklist, sample data, and role-based first-run.
+  Agent tools recommend an onboarding path, detect drop-off, and suggest the
+  next step. Ships schema + API + admin + agent tooling + UI.
+maintainer: nexus-platform
+status: beta
+compatibility:
+  min_runtime: 1.0.0
+  min_nexus_spec: 2.1.0
+depends_on:
+  - identity-and-access
+slots:
+  - name: onboarding_checklist
+    description: First-run checklist widget shown until onboarding completes.
+    contract: react-component
+  - name: welcome_tour
+    description: Product tour overlay for the first session.
+    contract: react-component
+config_schema:
+  type: object
+  required:
+    - steps
+  properties:
+    steps:
+      type: array
+      description: Ordered onboarding step keys.
+      items: { type: string }
+      default: [verify_email, complete_profile, first_action, invite_team]
+    sample_data:
+      type: object
+      properties:
+        enabled: { type: boolean, default: true }

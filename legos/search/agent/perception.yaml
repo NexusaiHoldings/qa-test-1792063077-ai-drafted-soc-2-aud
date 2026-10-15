@@ -1,0 +1,7 @@
+lego_name: search
+version: 1.0.0
+perception:
+  - event: search.performed
+    workflow_implications: [track_search_analytics]
+  - event: search.zero_results
+    workflow_implications: [suggest_search_refinement]

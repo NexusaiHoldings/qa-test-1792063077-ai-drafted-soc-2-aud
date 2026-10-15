@@ -1,0 +1,23 @@
+lego_name: social-and-engagement
+version: 1.0.0
+policies:
+  - tool: moderate_comment
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only moderation verdict. Hiding is a separate confirm action.
+  - tool: summarize_review_sentiment
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only sentiment summary. No mutation.
+  - tool: detect_spam_engagement
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only spam detection surfaced to the moderator. No mutation.
+  - tool: suggest_referral_reward
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only reward recommendation. The operator grants it.
+  - tool: hide_comment
+    autonomy_floor: confirm
+    approval_required: true
+    rationale: Hides user content; a moderator approves the action (confirm).

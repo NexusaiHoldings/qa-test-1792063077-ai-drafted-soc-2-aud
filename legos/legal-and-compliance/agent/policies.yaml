@@ -1,0 +1,29 @@
+# Legal & Compliance lego — agent autonomy policies
+# Floors per spec §5.7 — agent cannot act BELOW the floor for a given tool
+
+policies:
+  - tool: summarize_legal_doc
+    action_class: none
+    autonomy_floor: none
+    rationale: Read-only lookup. No user data is modified. Safe for full automation.
+
+  - tool: check_acknowledgment_compliance
+    action_class: none
+    autonomy_floor: none
+    rationale: Read-only compliance check. No side effects.
+
+  - tool: recommend_disclosure_addendum
+    action_class: notify
+    autonomy_floor: notify
+    rationale: >
+      Regulated disclosure recommendations require human review before any action.
+      The notify floor ensures an admin is always informed and the recommendation is
+      never applied automatically. Per spec §8, regulated_advisor and fiduciary
+      companies require outside counsel review of any disclosure text.
+
+global_constraints:
+  - Never automatically publish or modify legal documents.
+  - Never automatically delete acknowledgment records.
+  - All recommend_disclosure_addendum calls must be surfaced to an admin or owner role.
+  - Acknowledge that legal content is PLACEHOLDER — flag prominently when returning
+    any text that originated from a template rather than outside counsel review.

@@ -1,0 +1,10 @@
+{
+  "lego_name": "analytics-and-telemetry",
+  "version": "1.0.0",
+  "description": "Typed event definitions for the analytics-and-telemetry lego (spec §7.6).",
+  "events": [
+    { "name": "analytics.event_recorded", "required": ["name"], "properties": { "name": "string" } },
+    { "name": "analytics.metric_anomaly", "required": ["metric"], "properties": { "metric": "string", "direction": "string" } },
+    { "name": "analytics.retention_drop", "required": ["cohort"], "properties": { "cohort": "string" } }
+  ]
+}

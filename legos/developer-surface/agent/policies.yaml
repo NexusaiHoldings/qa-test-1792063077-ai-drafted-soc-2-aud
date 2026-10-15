@@ -1,0 +1,19 @@
+lego_name: developer-surface
+version: 1.0.0
+policies:
+  - tool: summarize_api_usage
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only usage summary. No mutation.
+  - tool: detect_anomalous_api_traffic
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only anomaly detection surfaced to the developer. No mutation.
+  - tool: recommend_rate_limit
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only recommendation. The developer applies it.
+  - tool: revoke_api_key
+    autonomy_floor: confirm
+    approval_required: true
+    rationale: Cuts off API access; a developer/operator approves the revoke (confirm).

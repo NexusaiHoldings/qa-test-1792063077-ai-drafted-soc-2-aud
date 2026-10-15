@@ -1,0 +1,69 @@
+# State changes this lego emits — mapped to workflow state implications.
+# The runtime uses this file to decide whether to re-evaluate running workflows
+# when these events fire.
+lego_name: identity-and-access
+version: 1.0.0
+
+perception:
+  - event: user.created
+    workflow_implications:
+      - trigger_onboarding_check
+      - initialize_user_risk_profile
+
+  - event: user.signed_in
+    workflow_implications:
+      - run_suspicious_login_check
+      - update_session_risk_context
+
+  - event: user.signed_out
+    workflow_implications:
+      - clear_session_risk_context
+
+  - event: user.suspicious_login_detected
+    workflow_implications:
+      - escalate_to_operator
+      - freeze_session_pending_review
+
+  - event: user.password_reset_requested
+    workflow_implications:
+      - log_account_recovery_attempt
+      - run_credential_stuffing_check
+
+  - event: user.password_reset_completed
+    workflow_implications:
+      - invalidate_all_sessions
+      - notify_user_of_password_change
+
+  - event: user.mfa_enrolled
+    workflow_implications:
+      - update_user_risk_profile
+      - send_mfa_enrolled_confirmation_email
+
+  - event: user.mfa_challenge_failed
+    workflow_implications:
+      - increment_failed_mfa_counter
+      - escalate_on_repeated_failure
+
+  - event: user.oauth_signup
+    workflow_implications:
+      - trigger_onboarding_check
+      - initialize_user_risk_profile
+
+  - event: user.oauth_login
+    workflow_implications:
+      - run_suspicious_login_check
+      - run_account_takeover_check
+
+  - event: user.deletion_requested
+    workflow_implications:
+      - score_deletion_risk
+      - schedule_grace_period_expiry_check
+
+  - event: user.session_revoked
+    workflow_implications:
+      - update_session_risk_context
+
+  - event: user.mfa_factor_admin_revoked
+    workflow_implications:
+      - notify_user_of_mfa_change
+      - update_user_risk_profile

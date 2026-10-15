@@ -1,0 +1,43 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalEnv": [
+    "DATABASE_URL",
+    "NEXTAUTH_URL",
+    "NEXTAUTH_SECRET",
+    "ADMIN_EMAIL",
+    "ADMIN_PASSWORD",
+    "SETUP_SECRET",
+    "NODE_ENV",
+    "COMPANY_NAME",
+    "COMPANY_SLUG",
+    "COMPANY_DOMAIN",
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "RUNTIME_BASE_URL",
+    "RUNTIME_AUTH_TOKEN"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build", "@nexus-substrate/db#migrate"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "@nexus-substrate/db#migrate": {
+      "cache": false,
+      "env": ["DATABASE_URL"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "dependsOn": ["^lint"]
+    },
+    "test": {
+      "dependsOn": ["^test"],
+      "outputs": ["coverage/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["^typecheck"]
+    }
+  }
+}

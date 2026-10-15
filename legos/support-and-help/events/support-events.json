@@ -1,0 +1,65 @@
+{
+  "lego_name": "support-and-help",
+  "version": "1.0.0",
+  "description": "Typed event definitions for the support-and-help lego (spec §7.6). Relayed to portfolio-runtime perception + analytics-and-telemetry.",
+  "events": [
+    {
+      "name": "ticket.created",
+      "required": ["ticket_id", "subject"],
+      "properties": {
+        "ticket_id": "uuid",
+        "user_id": "uuid",
+        "subject": "string",
+        "priority": "string"
+      }
+    },
+    {
+      "name": "ticket.message_added",
+      "required": ["ticket_id", "author_type"],
+      "properties": {
+        "ticket_id": "uuid",
+        "author_type": "string"
+      }
+    },
+    {
+      "name": "ticket.escalated",
+      "required": ["ticket_id"],
+      "properties": {
+        "ticket_id": "uuid",
+        "reason": "string"
+      }
+    },
+    {
+      "name": "ticket.assigned",
+      "required": ["ticket_id"],
+      "properties": {
+        "ticket_id": "uuid",
+        "assignee_type": "string"
+      }
+    },
+    {
+      "name": "ticket.resolved",
+      "required": ["ticket_id"],
+      "properties": {
+        "ticket_id": "uuid"
+      }
+    },
+    {
+      "name": "support.feedback_submitted",
+      "required": ["feedback_id", "rating"],
+      "properties": {
+        "feedback_id": "uuid",
+        "ticket_id": "uuid",
+        "rating": "integer"
+      }
+    },
+    {
+      "name": "kb.article_viewed",
+      "required": ["article_id"],
+      "properties": {
+        "article_id": "uuid",
+        "slug": "string"
+      }
+    }
+  ]
+}

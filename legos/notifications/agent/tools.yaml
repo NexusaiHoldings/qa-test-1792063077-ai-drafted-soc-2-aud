@@ -1,0 +1,89 @@
+# Agent-callable tools for the Notifications lego.
+# Spec: NEXUS_PORTFOLIO_RUNTIME_SPEC §5.7
+
+tools:
+  - name: predict_send_time
+    description: >
+      Predict the optimal send time for a user based on their open/click
+      history. Returns a target send_at timestamp and confidence score.
+    inputs:
+      type: object
+      required: [user_id, category]
+      properties:
+        user_id: { type: string }
+        category: { type: string }
+    outputs:
+      type: object
+      properties:
+        recommended_send_at: { type: string, format: date-time }
+        confidence: { type: number }
+        reasoning: { type: string }
+    side_effects: []
+    idempotent: true
+    cost_estimate:
+      llm_tokens: 1500
+      provider_cost_usd: 0.005
+      compute_profile: low
+    requires_approval: none
+    rate_limit: 100_per_company_per_hour
+    failure_modes:
+      - insufficient_history
+    lego_name: notifications
+
+  - name: detect_engagement_decay
+    description: >
+      Detect users whose open/click rates have degraded recently. Useful
+      for proactively pausing low-priority sends or triggering re-engagement.
+    inputs:
+      type: object
+      required: [user_id]
+      properties:
+        user_id: { type: string }
+        window_days:
+          type: integer
+          default: 30
+    outputs:
+      type: object
+      properties:
+        decay_detected: { type: boolean }
+        previous_open_rate: { type: number }
+        recent_open_rate: { type: number }
+        recommendation: { type: string }
+    side_effects: []
+    idempotent: true
+    cost_estimate:
+      llm_tokens: 800
+      provider_cost_usd: 0.002
+      compute_profile: low
+    requires_approval: none
+    rate_limit: 50_per_user_per_day
+    failure_modes:
+      - insufficient_history
+    lego_name: notifications
+
+  - name: rewrite_for_tone
+    description: >
+      Rewrite a notification body in a specified tone (formal, friendly,
+      urgent). Useful when a portfolio company wants tone consistency
+      across templates without forking each template file.
+    inputs:
+      type: object
+      required: [original_text, target_tone]
+      properties:
+        original_text: { type: string }
+        target_tone: { type: string, enum: [formal, friendly, urgent, neutral] }
+    outputs:
+      type: object
+      properties:
+        rewritten_text: { type: string }
+    side_effects: []
+    idempotent: true
+    cost_estimate:
+      llm_tokens: 1000
+      provider_cost_usd: 0.003
+      compute_profile: low
+    requires_approval: notify
+    rate_limit: 200_per_company_per_day
+    failure_modes:
+      - text_too_long
+    lego_name: notifications

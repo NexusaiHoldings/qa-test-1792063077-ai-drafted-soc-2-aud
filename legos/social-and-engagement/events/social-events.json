@@ -1,0 +1,10 @@
+{
+  "lego_name": "social-and-engagement",
+  "version": "1.0.0",
+  "description": "Typed event definitions for the social-and-engagement lego (spec §7.6).",
+  "events": [
+    { "name": "comment.posted", "required": ["comment_id"], "properties": { "comment_id": "uuid", "entity_type": "string" } },
+    { "name": "comment.hidden", "required": ["comment_id"], "properties": { "comment_id": "uuid", "reason": "string" } },
+    { "name": "referral.converted", "required": ["referral_id"], "properties": { "referral_id": "uuid" } }
+  ]
+}

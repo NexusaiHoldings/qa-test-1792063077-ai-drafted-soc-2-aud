@@ -1,0 +1,37 @@
+# Social & Engagement lego — manifest.yaml
+# NEXUS_PORTFOLIO_RUNTIME_SPEC §11 capability #14 — social-and-engagement-buildout-001 (v1.0.0)
+name: social-and-engagement
+version: 1.0.0
+description: >
+  Comments, reactions, reviews, and referrals. §12 agent tools moderate
+  comments, summarize review sentiment, detect spam engagement, and suggest
+  referral rewards. Ships schema + API + admin + agent tooling + UI.
+maintainer: nexus-platform
+status: beta
+compatibility:
+  min_runtime: 1.0.0
+  min_nexus_spec: 2.1.0
+depends_on:
+  - identity-and-access
+slots:
+  - name: comment_thread
+    description: Comment thread component for any entity (post/product/etc).
+    contract: react-component
+  - name: reaction_bar
+    description: Reaction (like/etc) bar for an entity.
+    contract: react-component
+config_schema:
+  type: object
+  required:
+    - moderation
+  properties:
+    moderation:
+      type: object
+      properties:
+        auto_hide_spam: { type: boolean, default: false }
+        require_approval: { type: boolean, default: true }
+    referrals:
+      type: object
+      properties:
+        enabled: { type: boolean, default: true }
+        reward_type: { type: string, default: credit }

@@ -1,0 +1,98 @@
+# Legal & Compliance lego — agent tools
+# 3 typed tools per spec §5.7
+
+tools:
+  - name: summarize_legal_doc
+    description: >
+      Retrieve and summarize a legal document in plain English.
+      Returns a concise summary and key points suitable for user-facing communication.
+    inputs:
+      doc_id:
+        type: string
+        description: UUID of the legal document to summarize
+        required: true
+    outputs:
+      plain_english_summary:
+        type: string
+        description: 2-3 sentence plain-language summary of the document
+      key_points:
+        type: array
+        items:
+          type: string
+        description: Bullet-point list of the most important provisions
+      doc_type:
+        type: string
+        description: Document type (terms_of_service, privacy_policy, etc.)
+      version:
+        type: string
+        description: Document version
+    action_class: none
+    endpoint: GET /api/legal/documents/{doc_id}
+
+  - name: check_acknowledgment_compliance
+    description: >
+      Check whether a user has acknowledged all currently-effective legal documents
+      for the configured jurisdiction. Returns a list of missing acknowledgments.
+    inputs:
+      user_id:
+        type: string
+        description: UUID of the user to check
+        required: true
+      jurisdiction:
+        type: string
+        description: Jurisdiction to check (us, eu, uk, ca, au, global)
+        required: false
+        default: us
+    outputs:
+      missing_docs:
+        type: array
+        items:
+          type: object
+        description: List of documents the user has not yet acknowledged
+      ack_status:
+        type: string
+        enum: [compliant, non_compliant, no_docs_published]
+        description: Overall acknowledgment compliance status
+      missing_count:
+        type: integer
+        description: Number of documents requiring acknowledgment
+    action_class: none
+    endpoint: GET /api/legal/acknowledgments/missing/me
+
+  - name: recommend_disclosure_addendum
+    description: >
+      For regulated_advisor or fiduciary companies, generate a recommended disclosure
+      addendum for a specific document type and jurisdiction. The addendum text is
+      appropriate for inclusion in external communications.
+      Only applicable when liability_boundary_class is regulated_advisor or fiduciary.
+    inputs:
+      doc_type:
+        type: string
+        description: Document type to generate addendum for
+        required: true
+        enum: [terms_of_service, privacy_policy, cookie_policy, accessibility_statement]
+      liability_boundary_class:
+        type: string
+        description: Company's liability boundary classification from spec §8
+        required: true
+        enum: [tool, assistant, fiduciary, regulated_advisor]
+      jurisdiction:
+        type: string
+        description: Jurisdiction for the disclosure
+        required: true
+    outputs:
+      recommended_addendum_text:
+        type: string
+        description: Recommended disclosure addendum text (PLACEHOLDER — requires outside counsel review)
+      reasoning:
+        type: string
+        description: Explanation of why this addendum is recommended
+      requires_legal_review:
+        type: boolean
+        description: Always true for regulated_advisor and fiduciary — outside counsel review required
+    action_class: notify
+    endpoint: internal
+    notes: >
+      This tool ALWAYS returns requires_legal_review=true for regulated_advisor and
+      fiduciary liability boundaries. Per spec §8 and ADR 0009, outside counsel review
+      of any recommended addendum is mandatory before use with real users.

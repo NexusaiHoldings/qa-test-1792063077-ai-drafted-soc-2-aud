@@ -1,0 +1,94 @@
+# Agent-callable tools for the Billing & Subscriptions lego.
+# Spec: NEXUS_PORTFOLIO_RUNTIME_SPEC §5.7 (typed tool registry) + §12.
+
+tools:
+  - name: predict_churn_risk
+    description: >
+      Score a user's churn risk based on subscription status, payment
+      history, and recent engagement signals. Returns risk_score 0-100
+      plus contributing indicators.
+    inputs:
+      type: object
+      required: [user_id]
+      properties:
+        user_id: { type: string }
+    outputs:
+      type: object
+      properties:
+        risk_score: { type: integer }
+        indicators: { type: array, items: { type: string } }
+    side_effects: []
+    idempotent: true
+    cost_estimate:
+      llm_tokens: 1500
+      provider_cost_usd: 0.005
+      compute_profile: low
+    requires_approval: none
+    rate_limit: 30_per_company_per_hour
+    failure_modes:
+      - user_not_found
+      - insufficient_history
+    lego_name: billing-and-subscriptions
+
+  - name: summarize_invoice_for_customer
+    description: >
+      Generate a plain-English summary of a Stripe invoice for the
+      customer, highlighting line items, prorations, taxes, and the
+      total. Read-only — does not change state.
+    inputs:
+      type: object
+      required: [stripe_invoice_id]
+      properties:
+        stripe_invoice_id: { type: string }
+    outputs:
+      type: object
+      properties:
+        plain_summary: { type: string }
+        line_items: { type: array }
+        total_cents: { type: integer }
+    side_effects: []
+    idempotent: true
+    cost_estimate:
+      llm_tokens: 1000
+      provider_cost_usd: 0.003
+      compute_profile: low
+    requires_approval: none
+    rate_limit: 100_per_company_per_hour
+    failure_modes:
+      - invoice_not_found
+      - stripe_unavailable
+    lego_name: billing-and-subscriptions
+
+  - name: recommend_tier_change
+    description: >
+      Analyze the user's usage patterns and current tier to recommend
+      either upgrade (more usage = pay more), downgrade (under-using =
+      save money), or no-change. Includes reasoning suitable for
+      surfacing to the user as a suggestion.
+    inputs:
+      type: object
+      required: [user_id]
+      properties:
+        user_id: { type: string }
+        usage_window_days:
+          type: integer
+          default: 30
+    outputs:
+      type: object
+      properties:
+        recommendation: { type: string, enum: [upgrade, downgrade, no_change] }
+        recommended_tier: { type: string }
+        reasoning: { type: string }
+    side_effects: []
+    idempotent: true
+    cost_estimate:
+      llm_tokens: 2000
+      provider_cost_usd: 0.007
+      compute_profile: med
+    requires_approval: notify
+    rate_limit: 10_per_user_per_day
+    failure_modes:
+      - user_not_found
+      - no_active_subscription
+      - insufficient_usage_data
+    lego_name: billing-and-subscriptions

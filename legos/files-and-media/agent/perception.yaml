@@ -1,0 +1,9 @@
+lego_name: files-and-media
+version: 1.0.0
+perception:
+  - event: file.uploaded
+    workflow_implications: [categorize_uploaded_file, run_virus_scan]
+  - event: file.scan_completed
+    workflow_implications: [flag_if_infected]
+  - event: dataset.imported
+    workflow_implications: [flag_anomaly_in_dataset]

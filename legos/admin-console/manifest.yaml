@@ -1,0 +1,117 @@
+# Admin Console lego — NEXUS_PORTFOLIO_RUNTIME_SPEC §4.5 + §11 capability #11
+name: admin-console
+version: 0.1.0
+description: Privileged lego providing the shared admin shell that hosts every other lego's admin/ contribution. Ships AdminShell + AdminPageTemplate + AdminTable component vocabulary plus feature flags / system config / audit log UI.
+maintainer: nexus-platform
+status: alpha
+compatibility:
+  min_runtime: 1.0.0
+  min_nexus_spec: 2.1.0
+depends_on:
+  - identity-and-access: ">=1.0.0"
+slots:
+  - name: admin_nav_extra
+    description: Extra navigation items injected into the admin sidebar by other legos.
+    contract: react-component
+  - name: admin_dashboard_widgets
+    description: Widgets contributed to the admin dashboard overview page.
+    contract: react-component
+  - name: admin_user_actions
+    description: Per-row action buttons injected into the admin users table (e.g. Identity & Access "force delete" / "revoke sessions").
+    contract: react-component
+
+config_schema:
+  type: object
+  required:
+    - default_permissions
+    - enable_impersonation
+    - enable_feature_flags
+  properties:
+    default_permissions:
+      type: array
+      description: Roles that have access to the admin console by default.
+      items:
+        type: string
+    enable_impersonation:
+      type: boolean
+      description: >
+        Show impersonation button in admin shell. Actual session-switching is
+        deferred to a future security-review sprint.
+      default: false
+    enable_feature_flags:
+      type: boolean
+      description: Enable the feature flags admin section.
+      default: true
+
+required_config: true
+
+runtime:
+  events:
+    subscribes_to: []
+    emits:
+      - admin.section_loaded
+      - admin.action_invoked
+      - admin.feature_flag_changed
+      - admin.system_config_changed
+      - admin.impersonation_started
+      - admin.impersonation_ended
+
+  permissions:
+    required_roles:
+      - admin
+      - owner
+    feature_flags: []
+
+  experiments:
+    enabled: false
+    configurable: false
+
+  telemetry:
+    required_events:
+      - admin_page_viewed
+      - admin_action_completed
+      - feature_flag_toggled
+      - system_config_updated
+
+  cost:
+    compute_profile: low
+    billable: true
+
+identity_constraints:
+  allowed_categories:
+    - "*"
+  restricted_use_cases: []
+
+adapters:
+  default: roll_your_own
+  supported: []
+
+economics:
+  tracked_metrics:
+    - admin_action_count
+    - feature_flag_changes
+    - time_in_console
+
+env:
+  required:
+    - DATABASE_URL
+  optional: []
+
+migrations:
+  required: true
+  reversible: false
+
+admin:
+  sections:
+    - name: Feature Flags
+      order: 10
+      permissions: [admin, owner]
+      routes: [/admin/flags, "/admin/flags/{key}"]
+    - name: System Config
+      order: 11
+      permissions: [admin, owner]
+      routes: [/admin/config, "/admin/config/{key}"]
+    - name: Audit Log
+      order: 12
+      permissions: [admin, owner]
+      routes: [/admin/audit]

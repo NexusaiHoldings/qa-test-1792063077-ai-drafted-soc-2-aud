@@ -1,0 +1,19 @@
+lego_name: onboarding
+version: 1.0.0
+policies:
+  - tool: recommend_onboarding_path
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only path recommendation. No mutation.
+  - tool: detect_onboarding_dropoff
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only drop-off detection. Nudge surfaced; no action.
+  - tool: suggest_next_onboarding_step
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only next-step suggestion. No mutation.
+  - tool: provision_sample_data
+    autonomy_floor: confirm
+    approval_required: true
+    rationale: Writes sample data into the company DB; the user opts in (confirm).

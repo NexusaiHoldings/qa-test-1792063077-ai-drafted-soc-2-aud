@@ -1,0 +1,27 @@
+# Autonomy and approval policies for admin-console agent tools.
+# Per spec §5.8: all tools at notify floor for v1.
+lego_name: admin-console
+version: 0.1.0
+
+policies:
+  - tool: summarize_admin_activity
+    autonomy_floor: notify
+    approval_required: false
+    rationale: >
+      Read-only aggregation of existing audit data. No account mutations.
+      Summary is surfaced to the operator via the admin dashboard widget.
+
+  - tool: recommend_feature_flag_rollout
+    autonomy_floor: notify
+    approval_required: false
+    rationale: >
+      Advisory recommendation only. The operator executes any flag change
+      via the PATCH API; the agent never writes to feature_flags autonomously.
+
+  - tool: detect_anomalous_admin_action
+    autonomy_floor: notify
+    approval_required: false
+    rationale: >
+      Detection and risk-scoring only. Operator receives a notification
+      with risk_score and indicators; no account or config mutations occur
+      without explicit operator confirmation.

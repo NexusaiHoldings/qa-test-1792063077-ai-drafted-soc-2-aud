@@ -1,0 +1,44 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build artifacts
+.next/
+.turbo/
+dist/
+build/
+out/
+
+# env
+.env
+.env.local
+.env.*.local
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# tests
+coverage/
+.nyc_output/
+
+# typescript
+*.tsbuildinfo
+
+# package locks — kept OUT of substrate template (companies generate their own
+# fresh lockfile at first install). Including a lockfile in the template would
+# pin transitive versions across all companies, which is too coupled.
+package-lock.json
+yarn.lock
+pnpm-lock.yaml

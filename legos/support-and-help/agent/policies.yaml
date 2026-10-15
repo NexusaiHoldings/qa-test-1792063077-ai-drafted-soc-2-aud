@@ -1,0 +1,42 @@
+# Autonomy and approval policies for support-and-help agent tools.
+# Per spec §5.8: all tools start at the 'notify' floor.
+# Chairman can elevate individual tools post-merge.
+lego_name: support-and-help
+version: 1.0.0
+
+policies:
+  - tool: triage_incoming_ticket
+    autonomy_floor: notify
+    approval_required: false
+    rationale: >
+      Read-only classification. Sets the suggested category/priority that the
+      runtime applies; no customer-facing action. Surfaces to the operator queue.
+
+  - tool: suggest_kb_article
+    autonomy_floor: notify
+    approval_required: false
+    rationale: >
+      Read-only KB search. Powers AI deflection — when top_relevance exceeds the
+      company's min_kb_confidence the agent may answer from the KB. The deflection
+      answer itself goes out via draft_response, not this tool.
+
+  - tool: draft_response
+    autonomy_floor: notify
+    approval_required: false
+    rationale: >
+      Drafts a reply only. The draft is surfaced for operator review or sent via a
+      separate send action; drafting never contacts the customer by itself.
+
+  - tool: summarize_ticket_thread
+    autonomy_floor: notify
+    approval_required: false
+    rationale: >
+      Read-only summary for the operator queue. No mutation, no customer contact.
+
+  - tool: escalate_to_human
+    autonomy_floor: confirm
+    approval_required: true
+    rationale: >
+      Genuine state mutation — flips the ticket to the human queue. Gated behind
+      confirm so the operator approves the hand-off. The agent should escalate
+      (not silently abandon) tickets it cannot resolve; the operator confirms.

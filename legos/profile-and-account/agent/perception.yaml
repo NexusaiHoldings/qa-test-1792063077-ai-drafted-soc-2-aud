@@ -1,0 +1,24 @@
+# State changes this lego emits — mapped to workflow state implications.
+lego_name: profile-and-account
+version: 1.0.0
+
+perception:
+  - event: profile.updated
+    workflow_implications:
+      - recompute_completion_score
+
+  - event: account.connected_provider_added
+    workflow_implications:
+      - refresh_connected_summary
+
+  - event: account.export_requested
+    workflow_implications:
+      - start_export_job
+
+  - event: account.export_ready
+    workflow_implications:
+      - notify_user_export_ready
+
+  - event: account.went_stale
+    workflow_implications:
+      - propose_reengagement_nudge

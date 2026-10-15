@@ -1,0 +1,9 @@
+{
+  "lego_name": "search",
+  "version": "1.0.0",
+  "description": "Typed event definitions for the search lego (spec §7.6).",
+  "events": [
+    { "name": "search.performed", "required": ["q"], "properties": { "q": "string" } },
+    { "name": "search.zero_results", "required": ["q"], "properties": { "q": "string" } }
+  ]
+}

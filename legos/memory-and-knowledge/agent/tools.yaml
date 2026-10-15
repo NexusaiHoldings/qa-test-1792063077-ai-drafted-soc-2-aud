@@ -1,0 +1,115 @@
+# Agent-callable tools exported by the memory-and-knowledge lego.
+# Per spec §5.7 — every tool is typed, costed, and policy-tagged.
+
+tools:
+  - name: recall_relevant_memories
+    description: |
+      Retrieve long-term memories for the current portfolio company. Used by the
+      runtime planner to ground the next agent turn in prior durable patterns.
+    inputs:
+      type: object
+      required: [portfolio_company_id]
+      properties:
+        portfolio_company_id: { type: string, format: uuid }
+        portfolio_user_id: { type: string, format: uuid }
+        discipline:
+          type: string
+          description: Filter to one discipline (e.g. 'support', 'billing')
+        limit: { type: integer, default: 10, minimum: 1, maximum: 50 }
+    outputs:
+      type: object
+      properties:
+        memories: { type: array, items: { type: object } }
+        count: { type: integer }
+    side_effects:
+      - reads: [memory_items]
+      - writes: [memory_items.retrieval_count]
+    idempotent: false              # bumps retrieval_count
+    cost_estimate:
+      llm_tokens: 0
+      provider_cost_usd: 0.0
+      compute_profile: low
+    requires_approval: never
+    rate_limit: 60_per_minute_per_company
+    failure_modes:
+      - company_not_found
+      - rate_limit_exceeded
+
+  - name: store_durable_pattern
+    description: |
+      Promote a working-tier memory to long_term, OR insert a new long_term
+      memory directly. Used by the reflection module after observing a
+      durable pattern (spec §5.5 + §5.6 promotion_rule).
+    inputs:
+      type: object
+      required: [portfolio_company_id, discipline, payload]
+      properties:
+        portfolio_company_id: { type: string, format: uuid }
+        portfolio_user_id: { type: string, format: uuid }
+        working_memory_id:
+          type: string
+          format: uuid
+          description: If set, promotes this working row instead of inserting fresh
+        discipline: { type: string }
+        memory_type: { type: string, default: pattern }
+        importance:
+          type: string
+          enum: [low, medium, high, critical]
+          default: medium
+        payload:
+          type: object
+          description: Free-form JSON, indexed only by foreign keys
+    outputs:
+      type: object
+      properties:
+        memory_id: { type: string, format: uuid }
+        promoted_from: { type: string, format: uuid }
+    side_effects:
+      - writes: [memory_items, portfolio_runtime_memory]
+    idempotent: false
+    cost_estimate:
+      llm_tokens: 0
+      provider_cost_usd: 0.0
+      compute_profile: low
+    requires_approval: notify
+    rate_limit: 30_per_minute_per_company
+    failure_modes:
+      - working_memory_not_found
+      - payload_too_large
+
+  - name: forget_user
+    description: |
+      GDPR right-to-be-forgotten. Deletes ALL memory rows attributed to a
+      portfolio user across long_term + working tiers. Writes an immutable
+      audit row to portfolio_memory_forget_log.
+    inputs:
+      type: object
+      required: [portfolio_company_id, portfolio_user_id]
+      properties:
+        portfolio_company_id: { type: string, format: uuid }
+        portfolio_user_id: { type: string, format: uuid }
+        requested_by_user_id:
+          type: string
+          format: uuid
+          description: Admin operator (omit for self-request)
+        reason: { type: string }
+    outputs:
+      type: object
+      properties:
+        rows_deleted_memory_items: { type: integer }
+        rows_deleted_runtime_memory: { type: integer }
+        audit_id: { type: string, format: uuid }
+    side_effects:
+      - deletes: [memory_items, portfolio_runtime_memory]
+      - writes: [portfolio_memory_forget_log]
+    idempotent: true                # second call returns 0 + writes new audit row
+    cost_estimate:
+      llm_tokens: 0
+      provider_cost_usd: 0.0
+      compute_profile: low
+    requires_approval: confirm      # destructive — chairman or admin must confirm
+    rate_limit: 5_per_user_per_day
+    failure_modes:
+      - company_not_found
+      - user_not_found
+      - rate_limit_exceeded

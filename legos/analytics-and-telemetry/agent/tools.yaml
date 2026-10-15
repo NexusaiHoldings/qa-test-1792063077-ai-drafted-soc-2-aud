@@ -1,0 +1,98 @@
+# Agent-callable tools exported by the analytics-and-telemetry lego.
+lego_name: analytics-and-telemetry
+version: 1.0.0
+
+tools:
+  - name: summarize_funnel_performance
+    description: >
+      Summarize a funnel's step-by-step conversion + biggest drop-off + a
+      one-line verdict. Read-only.
+    inputs:
+      type: object
+      required: [funnel_steps, step_counts]
+      properties:
+        funnel_steps: { type: array, items: { type: string } }
+        step_counts:  { type: array, items: { type: integer } }
+    outputs:
+      type: object
+      properties:
+        summary:        { type: string }
+        biggest_dropoff: { type: string }
+        overall_conversion: { type: number }
+    side_effects: false
+    idempotent: true
+    action_class: none
+    requires_approval: false
+    rate_limit: { requests_per_minute: 60 }
+    cost_estimate: { llm_tokens: 400, provider_cost_usd: 0.0008, compute_profile: low }
+    failure_modes: [no_data]
+
+  - name: detect_metric_anomaly
+    description: >
+      Evaluate a metric time-series for anomalies (spike/drop vs trend) +
+      severity + likely cause hypotheses. Read-only.
+    inputs:
+      type: object
+      required: [series]
+      properties:
+        metric: { type: string }
+        series: { type: array, items: { type: object }, description: "[{ date, value }]" }
+    outputs:
+      type: object
+      properties:
+        anomaly_detected: { type: boolean }
+        direction:        { type: string, enum: [spike, drop, none] }
+        hypotheses:       { type: array, items: { type: string } }
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: { requests_per_minute: 60 }
+    cost_estimate: { llm_tokens: 400, provider_cost_usd: 0.0008, compute_profile: low }
+    failure_modes: [insufficient_series]
+
+  - name: recommend_event_to_track
+    description: >
+      Given the product's current event taxonomy + a goal, recommend additional
+      events worth instrumenting to close measurement gaps. Read-only.
+    inputs:
+      type: object
+      required: [current_taxonomy]
+      properties:
+        current_taxonomy: { type: array, items: { type: string } }
+        goal:             { type: string }
+    outputs:
+      type: object
+      properties:
+        recommended_events: { type: array, items: { type: string } }
+        rationale:          { type: string }
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: { requests_per_minute: 60 }
+    cost_estimate: { llm_tokens: 350, provider_cost_usd: 0.0007, compute_profile: low }
+    failure_modes: [no_taxonomy]
+
+  - name: explain_retention_drop
+    description: >
+      Given retention curves + recent product/marketing changes, hypothesize
+      causes of a retention drop + recommended investigations. Read-only.
+    inputs:
+      type: object
+      required: [retention_curve]
+      properties:
+        retention_curve: { type: array, items: { type: object } }
+        recent_changes:  { type: array, items: { type: string } }
+    outputs:
+      type: object
+      properties:
+        hypotheses:    { type: array, items: { type: string } }
+        investigations: { type: array, items: { type: string } }
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: { requests_per_minute: 60 }
+    cost_estimate: { llm_tokens: 500, provider_cost_usd: 0.001, compute_profile: low }
+    failure_modes: [no_curve]

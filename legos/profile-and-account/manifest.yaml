@@ -1,0 +1,72 @@
+# Profile & Account lego — manifest.yaml
+# NEXUS_PORTFOLIO_RUNTIME_SPEC §11 capability #2 — profile-and-account-buildout-001 (v1.0.0)
+name: profile-and-account
+version: 1.0.0
+description: >
+  Profile editor, connected accounts, sessions/devices view, and GDPR account
+  export. The account-management pillar that sits on top of identity. Agent
+  tools nudge profile completion, flag stale accounts, and run data-export
+  requests. Ships schema + API + admin + agent tooling + UI.
+maintainer: nexus-platform
+status: beta
+
+compatibility:
+  min_runtime: 1.0.0
+  min_nexus_spec: 2.1.0
+
+depends_on:
+  - identity-and-access
+
+slots:
+  - name: profile_settings_panel
+    description: >
+      The profile editor panel (display name, avatar, bio, timezone,
+      preferences). Mounted in the account settings surface.
+    contract: react-component
+
+  - name: connected_accounts_panel
+    description: >
+      List of connected OAuth/identity providers with connect/disconnect.
+    contract: react-component
+
+  - name: account_export_button
+    description: >
+      GDPR "download my data" button that requests an account export.
+    contract: react-component
+
+config_schema:
+  type: object
+  required:
+    - export
+  properties:
+    profile:
+      type: object
+      properties:
+        required_fields:
+          type: array
+          description: Profile fields that count toward the completion score.
+          items: { type: string }
+          default: [display_name, avatar_url, timezone]
+    export:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        format:
+          type: string
+          enum: [json, csv]
+          default: json
+        retention_days:
+          type: integer
+          description: How long a generated export download link stays valid.
+          minimum: 1
+          default: 7
+    stale_account:
+      type: object
+      properties:
+        inactive_days_threshold:
+          type: integer
+          description: Days of inactivity before detect_stale_account flags an account.
+          minimum: 1
+          default: 90

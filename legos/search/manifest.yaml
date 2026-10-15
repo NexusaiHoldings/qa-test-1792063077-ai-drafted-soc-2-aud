@@ -1,0 +1,44 @@
+# Search lego — manifest.yaml
+# NEXUS_PORTFOLIO_RUNTIME_SPEC §11 capability #8 — search-buildout-001 (v1.0.0)
+name: search
+version: 1.0.0
+description: >
+  Global cmd+K search, faceted filters, sort, pagination, and saved searches.
+  Agent tools rank results, suggest refinements, and read search intent. Ships
+  schema + API + admin + agent tooling + UI.
+maintainer: nexus-platform
+status: beta
+
+compatibility:
+  min_runtime: 1.0.0
+  min_nexus_spec: 2.1.0
+
+depends_on:
+  - identity-and-access
+
+slots:
+  - name: command_palette
+    description: Global cmd+K search palette mounted in the app shell.
+    contract: react-component
+  - name: search_results_panel
+    description: Faceted results panel with sort + pagination.
+    contract: react-component
+
+config_schema:
+  type: object
+  required:
+    - index
+  properties:
+    index:
+      type: object
+      properties:
+        entity_types:
+          type: array
+          description: Entity types indexed for search.
+          items: { type: string }
+          default: [page, document, contact, ticket]
+    facets:
+      type: array
+      description: Facet fields exposed in the results panel.
+      items: { type: string }
+      default: [entity_type, category]

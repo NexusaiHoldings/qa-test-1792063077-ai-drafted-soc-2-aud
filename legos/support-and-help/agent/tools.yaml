@@ -1,0 +1,155 @@
+# Agent-callable tools exported by the support-and-help lego.
+# Per spec §5.7 — every tool is typed, costed, and policy-tagged.
+# Per spec §12 — the agent runs first-line support; the operator supervises.
+lego_name: support-and-help
+version: 1.0.0
+
+tools:
+  - name: triage_incoming_ticket
+    description: >
+      Classify an incoming support ticket: assign a category, a priority
+      (low/normal/high/urgent), and a short routing rationale. Read-only —
+      returns the classification for the runtime to apply; does not mutate
+      the ticket itself.
+    inputs:
+      type: object
+      required: [subject, body]
+      properties:
+        subject: { type: string }
+        body:    { type: string }
+        user_context:
+          type: object
+          description: "Optional: plan tier, account age, prior ticket count"
+    outputs:
+      type: object
+      properties:
+        category:   { type: string }
+        priority:   { type: string, enum: [low, normal, high, urgent] }
+        rationale:  { type: string }
+        sentiment:  { type: string, enum: [positive, neutral, frustrated, angry] }
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: { requests_per_minute: 120 }
+    cost_estimate: { llm_tokens: 500, provider_cost_usd: 0.001, compute_profile: low }
+    failure_modes: [empty_body]
+
+  - name: suggest_kb_article
+    description: >
+      Given a user question, return the most relevant published knowledge-base
+      articles with a relevance score (0-1). Used for AI deflection — when the
+      top score exceeds the company's min_kb_confidence the agent answers from
+      the KB instead of opening a ticket.
+    inputs:
+      type: object
+      required: [question]
+      properties:
+        question: { type: string }
+        limit:    { type: integer, default: 3, minimum: 1, maximum: 10 }
+    outputs:
+      type: object
+      properties:
+        articles:
+          type: array
+          items:
+            type: object
+            properties:
+              article_id: { type: string }
+              title:      { type: string }
+              relevance:  { type: number, minimum: 0.0, maximum: 1.0 }
+        top_relevance: { type: number, minimum: 0.0, maximum: 1.0 }
+    side_effects: false
+    idempotent: true
+    action_class: none
+    requires_approval: false
+    rate_limit: { requests_per_minute: 120 }
+    cost_estimate: { llm_tokens: 400, provider_cost_usd: 0.0008, compute_profile: low }
+    failure_modes: [no_articles, empty_question]
+
+  - name: draft_response
+    description: >
+      Draft a customer-facing support reply grounded in the ticket thread and
+      (optionally) suggested KB articles. Read-only — returns the draft for
+      operator review or for the runtime to send via a separate send action.
+      Always on-brand, concise, and honest about what it cannot do.
+    inputs:
+      type: object
+      required: [ticket_subject, thread]
+      properties:
+        ticket_subject: { type: string }
+        thread:
+          type: array
+          description: "Ordered messages [{author_type, body}]"
+          items: { type: object }
+        kb_context:
+          type: array
+          description: "Optional KB article bodies to ground the answer"
+          items: { type: object }
+    outputs:
+      type: object
+      properties:
+        draft:         { type: string }
+        confidence:    { type: number, minimum: 0.0, maximum: 1.0 }
+        cites_kb:      { type: boolean }
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: { requests_per_minute: 60 }
+    cost_estimate: { llm_tokens: 800, provider_cost_usd: 0.0016, compute_profile: low }
+    failure_modes: [empty_thread]
+
+  - name: summarize_ticket_thread
+    description: >
+      Produce a concise summary of a ticket thread for the operator queue —
+      the issue, what's been tried, and the current blocker. Read-only.
+    inputs:
+      type: object
+      required: [thread]
+      properties:
+        thread:
+          type: array
+          items: { type: object }
+    outputs:
+      type: object
+      properties:
+        summary:        { type: string }
+        open_question:  { type: string }
+    side_effects: false
+    idempotent: true
+    action_class: none
+    requires_approval: false
+    rate_limit: { requests_per_minute: 120 }
+    cost_estimate: { llm_tokens: 400, provider_cost_usd: 0.0008, compute_profile: low }
+    failure_modes: [empty_thread]
+
+  - name: escalate_to_human
+    description: >
+      Hand a ticket to the human queue: flips assignee_type to 'human', sets
+      escalated_at, and records an internal note with the agent's reason. A
+      genuine state mutation — gated behind confirm so the operator approves
+      the hand-off (the agent should escalate, not silently abandon).
+    inputs:
+      type: object
+      required: [ticket_id, reason]
+      properties:
+        ticket_id: { type: string, format: uuid }
+        reason:    { type: string }
+        priority_override:
+          type: string
+          enum: [low, normal, high, urgent]
+    outputs:
+      type: object
+      properties:
+        ticket_id:    { type: string, format: uuid }
+        escalated:    { type: boolean }
+        assignee_type: { type: string }
+    side_effects:
+      - writes: [support_tickets.assignee_type, support_tickets.escalated_at, support_messages]
+    idempotent: true
+    action_class: confirm
+    requires_approval: confirm
+    rate_limit: { requests_per_minute: 30 }
+    cost_estimate: { llm_tokens: 0, provider_cost_usd: 0.0, compute_profile: low }
+    failure_modes: [ticket_not_found, already_escalated]

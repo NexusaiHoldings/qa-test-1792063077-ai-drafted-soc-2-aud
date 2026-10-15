@@ -1,0 +1,27 @@
+# State changes this lego emits — mapped to workflow state implications.
+lego_name: crm-and-lifecycle
+version: 1.0.0
+
+perception:
+  - event: lead.captured
+    workflow_implications:
+      - score_new_lead
+      - draft_first_touch_outreach
+
+  - event: contact.stage_changed
+    workflow_implications:
+      - reevaluate_next_action
+      - update_pipeline_rollup
+
+  - event: contact.interaction_logged
+    workflow_implications:
+      - rescore_lead
+      - refresh_contact_summary
+
+  - event: outreach.sent
+    workflow_implications:
+      - schedule_followup_check
+
+  - event: contact.went_cold
+    workflow_implications:
+      - propose_reengagement

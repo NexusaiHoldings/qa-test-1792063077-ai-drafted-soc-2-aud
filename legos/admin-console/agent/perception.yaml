@@ -1,0 +1,22 @@
+# State changes this lego emits — mapped to workflow state implications.
+lego_name: admin-console
+version: 0.1.0
+
+perception:
+  - event: admin.section_loaded
+    workflow_implications:
+      - update_admin_session_context
+
+  - event: admin.feature_flag_changed
+    workflow_implications:
+      - run_recommend_feature_flag_rollout
+      - log_flag_change_for_anomaly_check
+
+  - event: admin.system_config_changed
+    workflow_implications:
+      - log_config_change_for_anomaly_check
+      - notify_operator_of_config_update
+
+  - event: admin.action_invoked
+    workflow_implications:
+      - run_detect_anomalous_admin_action

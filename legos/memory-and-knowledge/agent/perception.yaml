@@ -1,0 +1,31 @@
+# Perception sources — events the runtime should listen for (spec §5.11).
+# The memory-and-knowledge lego itself is mostly a target of writes; its
+# perception is light.
+
+perception:
+  - subject: memory.contradiction.detected
+    description: |
+      Published by any lego when its agent observes evidence that contradicts
+      a recalled memory. Triggers contradiction-count increment.
+    schema:
+      memory_id: uuid
+      contradicting_evidence_summary: string
+      observed_at: iso8601
+
+  - subject: memory.eviction.scheduled
+    description: |
+      Published by the daily eviction cron when low-utility memories are about
+      to be demoted. Lets the admin console surface a summary.
+    schema:
+      portfolio_company_id: uuid
+      candidates_count: integer
+      threshold_days: integer
+
+  - subject: identity.user.deleted
+    description: |
+      Listens for Identity lego user-deletion events. Auto-fires a forget_user
+      call to clean up memory rows alongside the user account.
+    schema:
+      portfolio_company_id: uuid
+      portfolio_user_id: uuid
+      reason: string                # 'self_request' | 'admin' | 'gdpr'

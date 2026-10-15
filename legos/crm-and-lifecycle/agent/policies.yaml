@@ -1,0 +1,34 @@
+# Autonomy and approval policies for crm-and-lifecycle agent tools.
+# Per spec §5.8: tools start at the 'notify' floor; mutations gate at confirm.
+lego_name: crm-and-lifecycle
+version: 1.0.0
+
+policies:
+  - tool: score_lead
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only scoring. The runtime applies the score; no contact mutation by the tool.
+
+  - tool: summarize_contact_history
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only summary surfaced to the salesperson. No mutation.
+
+  - tool: propose_next_action
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Advisory recommendation only, surfaced in the contact sidebar. Salesperson acts.
+
+  - tool: generate_outreach_draft
+    autonomy_floor: notify
+    approval_required: false
+    rationale: >
+      Drafts only. The draft is stored pending approval (config.outreach.require_approval);
+      sending is a separate confirm-gated action. Drafting never contacts a lead by itself.
+
+  - tool: advance_contact_stage
+    autonomy_floor: confirm
+    approval_required: true
+    rationale: >
+      Genuine pipeline mutation. The salesperson approves the stage advance so the
+      agent never silently moves deals (e.g. mark won/lost) without sign-off.

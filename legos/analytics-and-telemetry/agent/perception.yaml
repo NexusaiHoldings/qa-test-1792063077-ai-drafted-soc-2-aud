@@ -1,0 +1,9 @@
+lego_name: analytics-and-telemetry
+version: 1.0.0
+perception:
+  - event: analytics.event_recorded
+    workflow_implications: [update_rollups]
+  - event: analytics.metric_anomaly
+    workflow_implications: [detect_metric_anomaly, notify_operator]
+  - event: analytics.retention_drop
+    workflow_implications: [explain_retention_drop]

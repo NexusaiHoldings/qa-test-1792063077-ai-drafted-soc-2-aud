@@ -1,0 +1,9 @@
+lego_name: developer-surface
+version: 1.0.0
+perception:
+  - event: api.key_created
+    workflow_implications: [recommend_rate_limit]
+  - event: api.traffic_spike
+    workflow_implications: [detect_anomalous_api_traffic]
+  - event: webhook.delivery_failed
+    workflow_implications: [flag_failing_webhook]

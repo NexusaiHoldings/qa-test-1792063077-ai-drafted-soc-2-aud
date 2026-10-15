@@ -1,0 +1,67 @@
+# Organizations & Teams lego — manifest.yaml
+# NEXUS_PORTFOLIO_RUNTIME_SPEC §11 capability #3 — organizations-and-teams-buildout-001 (v1.0.0)
+name: organizations-and-teams
+version: 1.0.0
+description: >
+  Multi-tenant organizations, member invitations, role-based access control,
+  seat management, and an audit log. The multi-tenancy pillar. Agent tools
+  recommend roles, flag unused seats, summarize org activity, and detect
+  permission anomalies. Ships schema + API + admin + agent tooling + UI.
+maintainer: nexus-platform
+status: beta
+
+compatibility:
+  min_runtime: 1.0.0
+  min_nexus_spec: 2.1.0
+
+depends_on:
+  - identity-and-access
+  - notifications
+
+slots:
+  - name: org_switcher
+    description: >
+      Org switcher dropdown for the app shell (when a user belongs to >1 org).
+    contract: react-component
+
+  - name: members_table
+    description: >
+      Members management table (role, seat, invite/remove) for org admins.
+    contract: react-component
+
+  - name: after_member_joined_hook
+    description: >
+      Server hook fired when a member accepts an invitation — used for
+      onboarding + seat accounting. No-op when unconfigured.
+    contract: server-hook
+
+config_schema:
+  type: object
+  required:
+    - roles
+    - seats
+  properties:
+    roles:
+      type: array
+      description: RBAC roles, most-privileged first.
+      items: { type: string }
+      default: [owner, admin, member, viewer]
+    seats:
+      type: object
+      properties:
+        default_limit:
+          type: integer
+          description: Default seat limit for a new org (0 = unlimited).
+          minimum: 0
+          default: 5
+        enforce:
+          type: boolean
+          description: Whether to block invitations beyond the seat limit.
+          default: true
+    invitations:
+      type: object
+      properties:
+        expiry_days:
+          type: integer
+          minimum: 1
+          default: 14

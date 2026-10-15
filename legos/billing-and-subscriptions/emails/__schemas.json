@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Billing email template variable schemas",
+  "description": "Variable schemas for each Resend email template. The Notifications lego (SS6) consumes these at send-time.",
+  "templates": {
+    "subscription_confirmed": {
+      "type": "object",
+      "required": ["first_name", "tier_name", "amount_cents", "next_billing_date", "manage_url"],
+      "properties": {
+        "first_name": { "type": "string" },
+        "tier_name": { "type": "string" },
+        "amount_cents": { "type": "integer" },
+        "next_billing_date": { "type": "string", "format": "date" },
+        "manage_url": { "type": "string", "format": "uri" }
+      }
+    },
+    "billing_payment_failed_first": {
+      "type": "object",
+      "required": ["first_name", "tier_name", "retry_url"],
+      "properties": {
+        "first_name": { "type": "string" },
+        "tier_name": { "type": "string" },
+        "retry_url": { "type": "string", "format": "uri" }
+      }
+    },
+    "billing_payment_failed_retry": {
+      "type": "object",
+      "required": ["first_name", "retry_url", "days_until_cancellation"],
+      "properties": {
+        "first_name": { "type": "string" },
+        "retry_url": { "type": "string", "format": "uri" },
+        "days_until_cancellation": { "type": "integer" }
+      }
+    },
+    "billing_payment_final_warning": {
+      "type": "object",
+      "required": ["first_name", "retry_url", "cancellation_date"],
+      "properties": {
+        "first_name": { "type": "string" },
+        "retry_url": { "type": "string", "format": "uri" },
+        "cancellation_date": { "type": "string", "format": "date" }
+      }
+    },
+    "billing_subscription_cancelled_dunning": {
+      "type": "object",
+      "required": ["first_name", "resubscribe_url"],
+      "properties": {
+        "first_name": { "type": "string" },
+        "resubscribe_url": { "type": "string", "format": "uri" }
+      }
+    },
+    "plan_change_applied": {
+      "type": "object",
+      "required": ["first_name", "from_tier_name", "to_tier_name", "proration_amount_cents", "manage_url"],
+      "properties": {
+        "first_name": { "type": "string" },
+        "from_tier_name": { "type": "string" },
+        "to_tier_name": { "type": "string" },
+        "proration_amount_cents": { "type": "integer" },
+        "manage_url": { "type": "string", "format": "uri" }
+      }
+    }
+  }
+}

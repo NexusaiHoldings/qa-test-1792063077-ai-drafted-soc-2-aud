@@ -1,0 +1,27 @@
+# Autonomy and approval policies for organizations-and-teams agent tools.
+lego_name: organizations-and-teams
+version: 1.0.0
+
+policies:
+  - tool: recommend_role_for_member
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only least-privilege recommendation. The admin assigns the role.
+  - tool: detect_unused_seats
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only seat analysis. Reclamation is a separate admin action.
+  - tool: summarize_org_activity
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only audit-log summary. No mutation.
+  - tool: flag_permission_anomaly
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only anomaly detection surfaced to the admin. No mutation.
+  - tool: change_member_role
+    autonomy_floor: confirm
+    approval_required: true
+    rationale: >
+      Genuine access-control mutation. An org admin approves the role change so
+      the agent never silently grants/revokes privileges.

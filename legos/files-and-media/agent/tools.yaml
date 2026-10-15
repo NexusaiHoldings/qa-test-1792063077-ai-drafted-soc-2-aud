@@ -1,0 +1,100 @@
+# Agent-callable tools exported by the files-and-media lego (spec §12).
+lego_name: files-and-media
+version: 1.0.0
+
+tools:
+  - name: categorize_uploaded_file
+    description: >
+      Categorize a freshly uploaded file (e.g. invoice / contract / image /
+      dataset) from its filename + mime + a content sample. Read-only.
+    inputs:
+      type: object
+      required: [filename, mime_type]
+      properties:
+        filename:        { type: string }
+        mime_type:       { type: string }
+        content_sample:  { type: string }
+    outputs:
+      type: object
+      properties:
+        category:   { type: string }
+        confidence: { type: number, minimum: 0.0, maximum: 1.0 }
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: { requests_per_minute: 120 }
+    cost_estimate: { llm_tokens: 400, provider_cost_usd: 0.0008, compute_profile: low }
+    failure_modes: [unreadable_file]
+
+  - name: extract_structured_data
+    description: >
+      Extract structured fields from a document/CSV sample (e.g. invoice line
+      items, contact rows) into JSON. Read-only — returns the extraction; the
+      runtime persists it via the file-extractions API.
+    inputs:
+      type: object
+      required: [content_sample]
+      properties:
+        content_sample: { type: string }
+        schema_hint:    { type: object, description: "Desired output field shape" }
+    outputs:
+      type: object
+      properties:
+        extracted:  { type: object }
+        confidence: { type: number, minimum: 0.0, maximum: 1.0 }
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: { requests_per_minute: 60 }
+    cost_estimate: { llm_tokens: 900, provider_cost_usd: 0.0018, compute_profile: low }
+    failure_modes: [no_content, unparseable]
+
+  - name: flag_anomaly_in_dataset
+    description: >
+      Scan an uploaded dataset sample for anomalies (outliers, malformed rows,
+      PII leakage, suspicious values). Returns flagged anomalies + severity.
+      Read-only.
+    inputs:
+      type: object
+      required: [rows]
+      properties:
+        rows: { type: array, items: { type: object } }
+    outputs:
+      type: object
+      properties:
+        anomalies:  { type: array, items: { type: object } }
+        risk_level: { type: string, enum: [low, medium, high] }
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: { requests_per_minute: 60 }
+    cost_estimate: { llm_tokens: 700, provider_cost_usd: 0.0014, compute_profile: low }
+    failure_modes: [no_rows]
+
+  - name: quarantine_file
+    description: >
+      Quarantine a file flagged as infected/suspicious — flips status to
+      'quarantined' so it can't be downloaded. A genuine state mutation gated
+      behind confirm so an operator approves quarantining a user's file.
+    inputs:
+      type: object
+      required: [file_id, reason]
+      properties:
+        file_id: { type: string, format: uuid }
+        reason:  { type: string }
+    outputs:
+      type: object
+      properties:
+        file_id: { type: string, format: uuid }
+        status:  { type: string }
+    side_effects:
+      - writes: [files.status]
+    idempotent: true
+    action_class: confirm
+    requires_approval: confirm
+    rate_limit: { requests_per_minute: 30 }
+    cost_estimate: { llm_tokens: 0, provider_cost_usd: 0.0, compute_profile: low }
+    failure_modes: [file_not_found]

@@ -1,0 +1,223 @@
+lego_name: identity-and-access
+version: 1.0.0
+
+tools:
+  - name: detect_suspicious_login
+    description: >
+      Analyze a login event for suspicious signals (new IP, impossible travel,
+      Tor exit node). Returns a risk_score (0-1) and list of flags.
+    inputs:
+      type: object
+      required: [user_id, ip_address, user_agent]
+      properties:
+        user_id:    {type: string, format: uuid}
+        ip_address: {type: string}
+        user_agent: {type: string}
+    outputs:
+      type: object
+      properties:
+        risk_score: {type: number, minimum: 0.0, maximum: 1.0}
+        flags:      {type: array, items: {type: string}}
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: {requests_per_minute: 60}
+    cost_estimate: {llm_tokens: 500, provider_cost_usd: 0.001, compute_profile: low}
+    failure_modes: [insufficient_history, ip_lookup_unavailable]
+
+  - name: analyze_session_risk
+    description: >
+      Evaluate the risk of an active session (age, IP changes, concurrent
+      sessions, recent failed attempts). Returns risk_score + recommendations.
+    inputs:
+      type: object
+      required: [session_id]
+      properties:
+        session_id: {type: string, format: uuid}
+    outputs:
+      type: object
+      properties:
+        risk_score:      {type: number, minimum: 0.0, maximum: 1.0}
+        recommendations: {type: array, items: {type: string}}
+    side_effects: false
+    idempotent: true
+    action_class: none
+    requires_approval: false
+    rate_limit: {requests_per_minute: 120}
+    cost_estimate: {llm_tokens: 300, provider_cost_usd: 0.0005, compute_profile: low}
+    failure_modes: [session_not_found, session_expired]
+
+  - name: suggest_passkey_upgrade
+    description: >
+      Decide whether to surface the WebAuthn passkey upgrade prompt for a user.
+      Considers account age, login frequency, device support, recent suspicious
+      logins. Returns should_suggest (bool) + reasoning (string).
+    inputs:
+      type: object
+      required: [user_id]
+      properties:
+        user_id: {type: string, format: uuid}
+    outputs:
+      type: object
+      properties:
+        should_suggest: {type: boolean}
+        reasoning:      {type: string}
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: {requests_per_minute: 30}
+    cost_estimate: {llm_tokens: 400, provider_cost_usd: 0.0008, compute_profile: low}
+    failure_modes: [user_not_found, insufficient_login_history]
+
+  - name: score_password_strength
+    description: >
+      Analyze a candidate password and return a strength score plus a list of
+      weak areas (e.g. too_short, no_symbols, common_pattern). Read-only; no
+      account mutations.
+    inputs:
+      type: object
+      required: [password]
+      properties:
+        password: {type: string}
+    outputs:
+      type: object
+      properties:
+        score:      {type: integer, minimum: 0, maximum: 100}
+        weak_areas: {type: array, items: {type: string}}
+    side_effects: false
+    idempotent: true
+    action_class: none
+    requires_approval: false
+    rate_limit: {requests_per_minute: 200}
+    cost_estimate: {llm_tokens: 200, provider_cost_usd: 0.0002, compute_profile: low}
+    failure_modes: [empty_password]
+
+  - name: detect_credential_stuffing
+    description: >
+      Evaluate whether a sequence of login failures from a given IP address
+      and/or user account resembles a credential-stuffing attack. Returns a
+      risk_score and a list of flags (e.g. high_failure_rate, distributed_ips).
+    inputs:
+      type: object
+      required: [ip_address, user_id, recent_failures]
+      properties:
+        ip_address:      {type: string}
+        user_id:         {type: string, format: uuid}
+        recent_failures: {type: integer, description: "Count of failures in the past hour"}
+    outputs:
+      type: object
+      properties:
+        risk_score: {type: number, minimum: 0.0, maximum: 1.0}
+        flags:      {type: array, items: {type: string}}
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: {requests_per_minute: 60}
+    cost_estimate: {llm_tokens: 400, provider_cost_usd: 0.0008, compute_profile: low}
+    failure_modes: [insufficient_data, ip_lookup_unavailable]
+
+  - name: recommend_mfa_method
+    description: >
+      Recommend the most appropriate MFA method for a user based on their
+      device capabilities and account risk profile. Returns the recommended
+      method (totp, sms, passkey) and the reasoning behind the suggestion.
+    inputs:
+      type: object
+      required: [user_id, device_capabilities]
+      properties:
+        user_id:             {type: string, format: uuid}
+        device_capabilities: {type: array, items: {type: string},
+                              description: "e.g. ['webauthn', 'totp_app']"}
+    outputs:
+      type: object
+      properties:
+        recommended_method: {type: string, enum: [totp, sms, passkey]}
+        reasoning:          {type: string}
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: {requests_per_minute: 60}
+    cost_estimate: {llm_tokens: 350, provider_cost_usd: 0.0007, compute_profile: low}
+    failure_modes: [user_not_found, no_supported_method]
+
+  - name: recommend_session_revocation
+    description: >
+      Given a user's active sessions, recommend which sessions should be revoked
+      based on risk signals (age, IP changes, device fingerprint shifts).
+      Returns a list of session ids recommended for revocation plus reasoning.
+      Admin should review before taking action.
+    inputs:
+      type: object
+      required: [user_id, sessions]
+      properties:
+        user_id:  {type: string, format: uuid}
+        sessions: {type: array, items: {type: object},
+                   description: "List of active session objects with id, ip_address, created_at"}
+    outputs:
+      type: object
+      properties:
+        recommended_revocations: {type: array, items: {type: string, format: uuid}}
+        reasoning:               {type: string}
+    side_effects: false
+    idempotent: true
+    action_class: confirm
+    requires_approval: true
+    rate_limit: {requests_per_minute: 30}
+    cost_estimate: {llm_tokens: 500, provider_cost_usd: 0.001, compute_profile: low}
+    failure_modes: [user_not_found, no_sessions]
+
+  - name: detect_account_takeover
+    description: >
+      Evaluate recent login history and session changes for signs of account
+      takeover (rapid provider change, unexpected OAuth login, mass session creation,
+      device fingerprint mismatch). Returns a risk_score and list of indicators.
+    inputs:
+      type: object
+      required: [user_id, recent_login_history, recent_session_changes]
+      properties:
+        user_id:                {type: string, format: uuid}
+        recent_login_history:   {type: array, items: {type: object}}
+        recent_session_changes: {type: array, items: {type: object}}
+    outputs:
+      type: object
+      properties:
+        risk_score: {type: number, minimum: 0.0, maximum: 1.0}
+        indicators: {type: array, items: {type: string}}
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: {requests_per_minute: 60}
+    cost_estimate: {llm_tokens: 600, provider_cost_usd: 0.0012, compute_profile: low}
+    failure_modes: [user_not_found, insufficient_history]
+
+  - name: score_account_deletion_risk
+    description: >
+      Assess the risk profile of an account deletion request. Considers account
+      age, paid subscription status, and open support history to recommend a path:
+      honor immediately, require additional verification, or escalate for manual review.
+    inputs:
+      type: object
+      required: [user_id, account_age, paid_status, support_history]
+      properties:
+        user_id:         {type: string, format: uuid}
+        account_age:     {type: integer, description: "Account age in days"}
+        paid_status:     {type: boolean, description: "True if user has an active paid subscription"}
+        support_history: {type: array, items: {type: object},
+                          description: "Recent support tickets or interactions"}
+    outputs:
+      type: object
+      properties:
+        risk_score:       {type: number, minimum: 0.0, maximum: 1.0}
+        recommended_path: {type: string, enum: [honor, verify, escalate]}
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: {requests_per_minute: 30}
+    cost_estimate: {llm_tokens: 450, provider_cost_usd: 0.0009, compute_profile: low}
+    failure_modes: [user_not_found, insufficient_data]

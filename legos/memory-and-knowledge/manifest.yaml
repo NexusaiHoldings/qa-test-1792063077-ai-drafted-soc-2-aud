@@ -1,0 +1,131 @@
+name: memory-and-knowledge
+version: 0.1.0
+description: |
+  Per-company memory + knowledge substrate for the portfolio runtime.
+  Implements the four-tier memory model (short_term / working / long_term / shared)
+  per spec §5.6 with per-company namespacing on memory_items, portfolio_learnings,
+  and a new portfolio_runtime_memory table for working-tier state. Provides GDPR
+  right-to-be-forgotten via the forget_user tool.
+maintainer: nexusai-holdings
+status: alpha
+
+compatibility:
+  min_runtime: 0.1.0
+  min_nexus_spec: 2.1.0
+
+depends_on:
+  - identity-and-access: ">=0.1.0"
+  - admin-console: ">=0.1.0"
+
+slots:
+  - name: admin_memory_inspector
+    description: Admin-console pane showing per-company memory rows + tier badges
+    contract: react-component
+  - name: user_memory_export
+    description: User-facing GDPR export + forget-me controls
+    contract: react-component
+
+config_schema:
+  type: object
+  required:
+    - working_memory_ttl_days
+    - long_term_eviction_no_retrieval_days
+  properties:
+    working_memory_ttl_days:
+      type: integer
+      default: 7
+      minimum: 1
+      maximum: 90
+      description: Working-tier memories evicted after N idle days (spec §5.6).
+    long_term_eviction_no_retrieval_days:
+      type: integer
+      default: 90
+      minimum: 30
+      maximum: 365
+      description: Long-term entries flagged low-value if not retrieved in N days.
+    contradiction_threshold:
+      type: integer
+      default: 3
+      minimum: 1
+      maximum: 10
+      description: Contradicting newer observations before a long-term memory is demoted.
+    knowledge_compiler_debounce_seconds:
+      type: integer
+      default: 300
+      minimum: 30
+      maximum: 3600
+      description: Min seconds between compiler runs per company.
+
+required_config: true
+
+runtime:
+  events:
+    subscribes_to:
+      - memory.contradiction.detected
+      - memory.eviction.scheduled
+      - identity.user.deleted
+    emits:
+      - memory.stored
+      - memory.recalled
+      - memory.promoted
+      - memory.demoted
+      - memory.forgotten
+      - knowledge.compiled
+  permissions:
+    required_roles:
+      - portfolio_runtime
+    feature_flags: []
+  experiments:
+    enabled: false
+    configurable: false
+  telemetry:
+    required_events:
+      - memory_store_called
+      - memory_recall_called
+      - memory_promoted
+      - memory_demoted
+      - memory_forget_invoked
+      - knowledge_compiler_run
+  cost:
+    compute_profile: low
+    billable: false
+
+identity_constraints:
+  allowed_categories:
+    - "*"
+  restricted_use_cases:
+    - cross_company_memory_share_without_compiler
+
+adapters:
+  default: postgres
+  supported:
+    - postgres
+    - redis_working_tier
+
+economics:
+  tracked_metrics:
+    - long_term_memory_count
+    - working_memory_count
+    - retrieval_count
+    - forget_invocations
+    - compiler_runs
+
+env:
+  required:
+    - DATABASE_URL
+  optional:
+    - REDIS_URL
+
+migrations:
+  required: true
+  reversible: false
+
+admin:
+  sections:
+    - name: Memory Inspector
+      order: 80
+      permissions:
+        - admin
+        - support
+      routes:
+        - /admin/memory

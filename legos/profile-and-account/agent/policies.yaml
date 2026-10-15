@@ -1,0 +1,26 @@
+# Autonomy and approval policies for profile-and-account agent tools.
+lego_name: profile-and-account
+version: 1.0.0
+
+policies:
+  - tool: suggest_profile_completion
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only suggestions surfaced in the profile panel. No mutation.
+
+  - tool: detect_stale_account
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only staleness scoring. The nudge is surfaced; no action taken.
+
+  - tool: summarize_connected_accounts
+    autonomy_floor: notify
+    approval_required: false
+    rationale: Read-only summary + security observations. No mutation.
+
+  - tool: request_account_export
+    autonomy_floor: confirm
+    approval_required: true
+    rationale: >
+      Creates a GDPR data-export job exposing the user's data. The user must
+      explicitly authorize the export (confirm) before it runs.

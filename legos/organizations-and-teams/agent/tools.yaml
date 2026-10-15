@@ -1,0 +1,127 @@
+# Agent-callable tools exported by the organizations-and-teams lego.
+# Per spec §5.7 — typed, costed, policy-tagged.
+lego_name: organizations-and-teams
+version: 1.0.0
+
+tools:
+  - name: recommend_role_for_member
+    description: >
+      Recommend the appropriate RBAC role (owner/admin/member/viewer) for a
+      member based on their activity + the org's role distribution + the
+      principle of least privilege. Read-only recommendation.
+    inputs:
+      type: object
+      required: [member, org_roles]
+      properties:
+        member:    { type: object, description: "{ current_role, activity_summary, joined_days_ago }" }
+        org_roles: { type: object, description: "Count of members per role" }
+    outputs:
+      type: object
+      properties:
+        recommended_role: { type: string, enum: [owner, admin, member, viewer] }
+        rationale:        { type: string }
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: { requests_per_minute: 60 }
+    cost_estimate: { llm_tokens: 350, provider_cost_usd: 0.0007, compute_profile: low }
+    failure_modes: [member_not_found]
+
+  - name: detect_unused_seats
+    description: >
+      Identify members who haven't been active within the org's inactivity
+      window — candidates for seat reclamation. Returns the list + a savings
+      estimate. Read-only.
+    inputs:
+      type: object
+      required: [members]
+      properties:
+        members: { type: array, items: { type: object }, description: "[{ user_id, last_active_days, role }]" }
+        inactive_days_threshold: { type: integer, default: 60 }
+    outputs:
+      type: object
+      properties:
+        unused_seats:   { type: array, items: { type: string } }
+        reclaimable:    { type: integer }
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: { requests_per_minute: 60 }
+    cost_estimate: { llm_tokens: 300, provider_cost_usd: 0.0006, compute_profile: low }
+    failure_modes: [no_members]
+
+  - name: summarize_org_activity
+    description: >
+      Summarize recent org activity from the audit log into an admin-facing
+      brief (notable changes, who did what, anything to review). Read-only.
+    inputs:
+      type: object
+      required: [audit_events]
+      properties:
+        audit_events: { type: array, items: { type: object } }
+    outputs:
+      type: object
+      properties:
+        summary:        { type: string }
+        items_to_review: { type: array, items: { type: string } }
+    side_effects: false
+    idempotent: true
+    action_class: none
+    requires_approval: false
+    rate_limit: { requests_per_minute: 60 }
+    cost_estimate: { llm_tokens: 400, provider_cost_usd: 0.0008, compute_profile: low }
+    failure_modes: [no_events]
+
+  - name: flag_permission_anomaly
+    description: >
+      Evaluate the org's role assignments for anomalies (too many owners, a
+      viewer performing admin actions, dormant admins). Returns flagged
+      anomalies + severity. Read-only.
+    inputs:
+      type: object
+      required: [members, recent_actions]
+      properties:
+        members:        { type: array, items: { type: object } }
+        recent_actions: { type: array, items: { type: object } }
+    outputs:
+      type: object
+      properties:
+        anomalies: { type: array, items: { type: object } }
+        risk_level: { type: string, enum: [low, medium, high] }
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: { requests_per_minute: 60 }
+    cost_estimate: { llm_tokens: 500, provider_cost_usd: 0.001, compute_profile: low }
+    failure_modes: [insufficient_data]
+
+  - name: change_member_role
+    description: >
+      Change a member's RBAC role (e.g. member → admin). A genuine access-control
+      mutation — gated behind confirm so an org admin approves the change.
+      Writes the new role + an audit-log entry.
+    inputs:
+      type: object
+      required: [org_id, user_id, new_role]
+      properties:
+        org_id:   { type: string, format: uuid }
+        user_id:  { type: string, format: uuid }
+        new_role: { type: string, enum: [owner, admin, member, viewer] }
+        reason:   { type: string }
+    outputs:
+      type: object
+      properties:
+        org_id:   { type: string, format: uuid }
+        user_id:  { type: string, format: uuid }
+        role:     { type: string }
+    side_effects:
+      - writes: [org_members.role, org_audit_log]
+    idempotent: true
+    action_class: confirm
+    requires_approval: confirm
+    rate_limit: { requests_per_minute: 30 }
+    cost_estimate: { llm_tokens: 0, provider_cost_usd: 0.0, compute_profile: low }
+    failure_modes: [member_not_found, invalid_role, last_owner_demotion]

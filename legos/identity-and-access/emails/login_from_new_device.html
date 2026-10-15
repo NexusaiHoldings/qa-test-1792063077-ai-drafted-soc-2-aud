@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="font-family:sans-serif;color:#111;max-width:600px;margin:0 auto;padding:24px">
+  <h1 style="font-size:24px;margin-bottom:8px">New sign-in detected, {{first_name}}</h1>
+  <p>Your account was accessed from a device we haven't seen before.</p>
+  <table style="border-collapse:collapse;width:100%;margin:16px 0">
+    <tr><td style="padding:8px;color:#6b7280">Device</td><td style="padding:8px">{{device_summary}}</td></tr>
+    <tr><td style="padding:8px;color:#6b7280">IP address</td><td style="padding:8px">{{ip_address}}</td></tr>
+  </table>
+  <p>If this was you, no action is needed. If not, secure your account immediately.</p>
+  <p style="margin:24px 0">
+    <a href="{{secure_account_url}}"
+       style="background:#b45309;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:600">
+      Secure my account
+    </a>
+  </p>
+</body>
+</html>

@@ -1,0 +1,82 @@
+lego_name: admin-console
+version: 0.1.0
+
+tools:
+  - name: summarize_admin_activity
+    description: >
+      Aggregate admin actions over a time range into a summary: top actors,
+      most-changed feature flags, most-modified config keys. Returns
+      activity_summary (string) and key_actions (list).
+    inputs:
+      type: object
+      required: [time_range]
+      properties:
+        time_range:
+          type: object
+          description: "Keys: from_ts, to_ts (ISO 8601)"
+        admin_user_id:
+          type: string
+          format: uuid
+          description: "Filter to a specific admin; omit for all admins"
+    outputs:
+      type: object
+      properties:
+        activity_summary: {type: string}
+        key_actions:      {type: array, items: {type: string}}
+    side_effects: false
+    idempotent: true
+    action_class: none
+    requires_approval: false
+    rate_limit: {requests_per_minute: 30}
+    cost_estimate: {llm_tokens: 600, provider_cost_usd: 0.0012, compute_profile: low}
+    failure_modes: [no_data_in_range, db_unavailable]
+
+  - name: recommend_feature_flag_rollout
+    description: >
+      Given a flag's current rollout percentage and success metrics,
+      recommend whether to increase, hold, or roll back the rollout.
+      Returns recommended_action (increase|hold|rollback) and reasoning.
+    inputs:
+      type: object
+      required: [flag_key, current_rollout, success_metrics]
+      properties:
+        flag_key:        {type: string}
+        current_rollout: {type: integer, minimum: 0, maximum: 100}
+        success_metrics: {type: object, description: "Metric name → value pairs"}
+    outputs:
+      type: object
+      properties:
+        recommended_action: {type: string, enum: [increase, hold, rollback]}
+        reasoning:          {type: string}
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: {requests_per_minute: 20}
+    cost_estimate: {llm_tokens: 500, provider_cost_usd: 0.001, compute_profile: low}
+    failure_modes: [flag_not_found, insufficient_metrics]
+
+  - name: detect_anomalous_admin_action
+    description: >
+      Score a sequence of recent admin actions for signs of compromise or
+      misuse (bulk deletions, off-hours activity, rapid config changes).
+      Returns risk_score (0-1) and indicators (list of strings).
+    inputs:
+      type: object
+      required: [admin_user_id, recent_actions]
+      properties:
+        admin_user_id:  {type: string, format: uuid}
+        recent_actions: {type: array, items: {type: object},
+                         description: "List of audit_log entries"}
+    outputs:
+      type: object
+      properties:
+        risk_score: {type: number, minimum: 0.0, maximum: 1.0}
+        indicators: {type: array, items: {type: string}}
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: {requests_per_minute: 60}
+    cost_estimate: {llm_tokens: 500, provider_cost_usd: 0.001, compute_profile: low}
+    failure_modes: [user_not_found, insufficient_history]

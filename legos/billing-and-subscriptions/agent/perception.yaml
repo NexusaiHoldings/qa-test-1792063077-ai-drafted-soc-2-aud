@@ -1,0 +1,31 @@
+# State changes this lego emits to the runtime.
+# Spec: NEXUS_PORTFOLIO_RUNTIME_SPEC §5.11 (perception sources).
+
+emits:
+  billing.checkout_session_created:
+    workflow_implication: user_started_checkout
+    severity: info
+
+  billing.subscription_created:
+    workflow_implication: user_became_paying_customer
+    severity: info
+
+  billing.subscription_cancelled:
+    workflow_implication: user_will_churn_at_period_end
+    severity: warning
+
+  billing.subscription_updated:
+    workflow_implication: subscription_state_changed
+    severity: info
+
+  billing.payment_succeeded:
+    workflow_implication: revenue_received
+    severity: info
+
+  billing.payment_failed:
+    workflow_implication: dunning_required_within_24h
+    severity: warning
+
+  billing.webhook_received:
+    workflow_implication: stripe_event_processed
+    severity: debug

@@ -1,0 +1,35 @@
+# State changes this lego emits — mapped to workflow state implications.
+# The runtime uses this file to decide whether to re-evaluate running workflows
+# when these events fire.
+lego_name: support-and-help
+version: 1.0.0
+
+perception:
+  - event: ticket.created
+    workflow_implications:
+      - run_ticket_triage
+      - attempt_ai_deflection
+
+  - event: ticket.message_added
+    workflow_implications:
+      - reevaluate_ticket_thread
+      - draft_followup_response
+
+  - event: ticket.escalated
+    workflow_implications:
+      - notify_human_queue
+      - summarize_thread_for_operator
+
+  - event: ticket.resolved
+    workflow_implications:
+      - request_csat_feedback
+      - capture_resolution_pattern
+
+  - event: support.feedback_submitted
+    workflow_implications:
+      - update_csat_rollup
+      - flag_low_rating_for_review
+
+  - event: kb.article_viewed
+    workflow_implications:
+      - update_deflection_signal

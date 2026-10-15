@@ -1,0 +1,14 @@
+# State changes this lego emits to the runtime.
+emits:
+  notifications.dispatched:
+    workflow_implication: notification_sent_to_user
+    severity: info
+  notifications.delivery_failed:
+    workflow_implication: notification_undeliverable
+    severity: warning
+  notifications.user_marked_read:
+    workflow_implication: user_engagement_signal
+    severity: debug
+  notifications.preferences_updated:
+    workflow_implication: user_changed_communication_prefs
+    severity: info

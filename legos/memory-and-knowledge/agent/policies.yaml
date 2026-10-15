@@ -1,0 +1,24 @@
+# Approval + escalation policies for memory tools (spec §5.8).
+
+policies:
+  recall_relevant_memories:
+    requires_approval: never        # read-only retrieval
+    escalation: none
+
+  store_durable_pattern:
+    requires_approval: notify       # informational; agent acts and tells operator
+    escalation: warn_on_high_volume
+    escalation_threshold: 50_per_hour_per_company
+
+  forget_user:
+    requires_approval: confirm      # destructive — explicit operator confirmation
+    escalation: always_log_to_admin_console
+    blocks_on_failure: true         # do NOT proceed if confirmation absent
+
+  contradict_memory:
+    requires_approval: never
+    escalation: notify_when_demoted
+
+  evict_low_utility:
+    requires_approval: notify       # bulk demotion — operator should be aware
+    escalation: notify_admin_console

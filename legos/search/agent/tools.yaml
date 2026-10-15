@@ -1,0 +1,70 @@
+# Agent-callable tools exported by the search lego.
+lego_name: search
+version: 1.0.0
+
+tools:
+  - name: rank_search_results
+    description: >
+      Re-rank candidate search results by relevance to the user's query +
+      intent. Returns ordered result ids with relevance scores. Read-only.
+    inputs:
+      type: object
+      required: [query, candidates]
+      properties:
+        query:      { type: string }
+        candidates: { type: array, items: { type: object } }
+    outputs:
+      type: object
+      properties:
+        ranked: { type: array, items: { type: object } }
+    side_effects: false
+    idempotent: true
+    action_class: none
+    requires_approval: false
+    rate_limit: { requests_per_minute: 200 }
+    cost_estimate: { llm_tokens: 400, provider_cost_usd: 0.0008, compute_profile: low }
+    failure_modes: [no_candidates]
+
+  - name: suggest_search_refinement
+    description: >
+      Given a query that returned few/no results, suggest refined queries or
+      facet filters. Read-only.
+    inputs:
+      type: object
+      required: [query]
+      properties:
+        query:        { type: string }
+        result_count: { type: integer }
+    outputs:
+      type: object
+      properties:
+        suggestions: { type: array, items: { type: string } }
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: { requests_per_minute: 200 }
+    cost_estimate: { llm_tokens: 300, provider_cost_usd: 0.0006, compute_profile: low }
+    failure_modes: [empty_query]
+
+  - name: summarize_search_intent
+    description: >
+      Classify the user's search intent (navigational / informational /
+      transactional) + extract key entities. Read-only.
+    inputs:
+      type: object
+      required: [query]
+      properties:
+        query: { type: string }
+    outputs:
+      type: object
+      properties:
+        intent:   { type: string, enum: [navigational, informational, transactional] }
+        entities: { type: array, items: { type: string } }
+    side_effects: false
+    idempotent: true
+    action_class: none
+    requires_approval: false
+    rate_limit: { requests_per_minute: 200 }
+    cost_estimate: { llm_tokens: 250, provider_cost_usd: 0.0005, compute_profile: low }
+    failure_modes: [empty_query]

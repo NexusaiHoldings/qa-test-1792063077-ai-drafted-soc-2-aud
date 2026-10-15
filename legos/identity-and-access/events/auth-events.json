@@ -1,0 +1,107 @@
+{
+  "lego_name": "identity-and-access",
+  "version": "0.1.0",
+  "description": "Typed PostHog event definitions for the identity-and-access lego (spec \u00a77.6).",
+  "events": [
+    {
+      "name": "user.created",
+      "required": [
+        "user_id",
+        "email"
+      ],
+      "properties": {
+        "user_id": "uuid",
+        "email": "string",
+        "source_ip": "string"
+      }
+    },
+    {
+      "name": "user.signed_in",
+      "required": [
+        "user_id"
+      ],
+      "properties": {
+        "user_id": "uuid",
+        "session_id": "uuid",
+        "source_ip": "string"
+      }
+    },
+    {
+      "name": "user.signed_out",
+      "required": [
+        "user_id"
+      ],
+      "properties": {
+        "user_id": "uuid",
+        "session_id": "uuid"
+      }
+    },
+    {
+      "name": "user.suspicious_login_detected",
+      "required": [
+        "user_id",
+        "risk_score",
+        "flags"
+      ],
+      "properties": {
+        "user_id": "uuid",
+        "risk_score": "number",
+        "flags": "string[]",
+        "source_ip": "string"
+      }
+    },
+    {
+      "name": "signup_started",
+      "required": [],
+      "properties": {
+        "referrer": "string"
+      }
+    },
+    {
+      "name": "signup_completed",
+      "required": [
+        "user_id"
+      ],
+      "properties": {
+        "user_id": "uuid",
+        "provider": "string"
+      }
+    },
+    {
+      "name": "signup_failed",
+      "required": [
+        "reason"
+      ],
+      "properties": {
+        "reason": "string"
+      }
+    },
+    {
+      "name": "login_attempted",
+      "required": [],
+      "properties": {
+        "email_domain": "string",
+        "source_ip": "string"
+      }
+    },
+    {
+      "name": "login_succeeded",
+      "required": [
+        "user_id"
+      ],
+      "properties": {
+        "user_id": "uuid"
+      }
+    },
+    {
+      "name": "login_failed",
+      "required": [
+        "reason"
+      ],
+      "properties": {
+        "reason": "string",
+        "source_ip": "string"
+      }
+    }
+  ]
+}

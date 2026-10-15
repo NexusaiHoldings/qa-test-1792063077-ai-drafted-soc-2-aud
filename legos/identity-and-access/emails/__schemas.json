@@ -1,0 +1,33 @@
+{
+  "welcome": {
+    "variables": {
+      "first_name": {"type": "string", "description": "User's first name or email prefix"},
+      "login_url":  {"type": "string", "description": "Full URL to the login page"}
+    },
+    "required": ["first_name", "login_url"]
+  },
+  "password_reset": {
+    "variables": {
+      "first_name": {"type": "string", "description": "User's first name or email prefix"},
+      "reset_url":  {"type": "string", "description": "Full tokenised password-reset URL"},
+      "expires_in": {"type": "string", "description": "Human-readable expiry e.g. '1 hour'"}
+    },
+    "required": ["first_name", "reset_url", "expires_in"]
+  },
+  "login_from_new_device": {
+    "variables": {
+      "first_name":        {"type": "string"},
+      "device_summary":    {"type": "string", "description": "Browser + OS string"},
+      "ip_address":        {"type": "string"},
+      "secure_account_url":{"type": "string", "description": "URL to account security settings"}
+    },
+    "required": ["first_name", "device_summary", "ip_address", "secure_account_url"]
+  },
+  "mfa_enrolled": {
+    "variables": {
+      "first_name":    {"type": "string"},
+      "factor_label":  {"type": "string", "description": "Label the user gave the MFA factor"}
+    },
+    "required": ["first_name", "factor_label"]
+  }
+}

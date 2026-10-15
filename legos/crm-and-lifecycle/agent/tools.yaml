@@ -1,0 +1,142 @@
+# Agent-callable tools exported by the crm-and-lifecycle lego.
+# Per spec §5.7 — typed, costed, policy-tagged. Per §12 the agent runs the
+# pipeline; the salesperson approves + personalizes.
+lego_name: crm-and-lifecycle
+version: 1.0.0
+
+tools:
+  - name: score_lead
+    description: >
+      Score a lead 0-100 on likelihood-to-convert from its attributes +
+      interaction history. Returns the score, a tier (cold/warm/hot), and the
+      top signals. Read-only — the runtime applies the score; the tool computes it.
+    inputs:
+      type: object
+      required: [contact]
+      properties:
+        contact:
+          type: object
+          description: "{ name, email?, company?, source?, stage, tags[] }"
+        interactions:
+          type: array
+          description: "Recent interactions [{kind, direction, body, created_at}]"
+          items: { type: object }
+    outputs:
+      type: object
+      properties:
+        score:   { type: integer, minimum: 0, maximum: 100 }
+        tier:    { type: string, enum: [cold, warm, hot] }
+        signals: { type: array, items: { type: string } }
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: { requests_per_minute: 120 }
+    cost_estimate: { llm_tokens: 500, provider_cost_usd: 0.001, compute_profile: low }
+    failure_modes: [insufficient_data]
+
+  - name: summarize_contact_history
+    description: >
+      Summarize a contact's interaction history into a concise brief: where the
+      relationship stands, what's been discussed, and outstanding items.
+      Read-only.
+    inputs:
+      type: object
+      required: [contact, interactions]
+      properties:
+        contact:      { type: object }
+        interactions: { type: array, items: { type: object } }
+    outputs:
+      type: object
+      properties:
+        summary:          { type: string }
+        last_touch:       { type: string }
+        outstanding_items: { type: array, items: { type: string } }
+    side_effects: false
+    idempotent: true
+    action_class: none
+    requires_approval: false
+    rate_limit: { requests_per_minute: 120 }
+    cost_estimate: { llm_tokens: 500, provider_cost_usd: 0.001, compute_profile: low }
+    failure_modes: [no_history]
+
+  - name: propose_next_action
+    description: >
+      Given a contact + its history + pipeline stage, propose the single best
+      next action (e.g. "send pricing follow-up", "schedule demo", "mark lost").
+      Read-only recommendation surfaced in the contact sidebar for the
+      salesperson to act on.
+    inputs:
+      type: object
+      required: [contact, interactions]
+      properties:
+        contact:      { type: object }
+        interactions: { type: array, items: { type: object } }
+    outputs:
+      type: object
+      properties:
+        action:       { type: string }
+        rationale:    { type: string }
+        suggested_stage: { type: string }
+        urgency:      { type: string, enum: [low, medium, high] }
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: { requests_per_minute: 120 }
+    cost_estimate: { llm_tokens: 600, provider_cost_usd: 0.0012, compute_profile: low }
+    failure_modes: [insufficient_data]
+
+  - name: generate_outreach_draft
+    description: >
+      Draft a personalized outreach message (email/sms/linkedin) for a contact,
+      grounded in their history + the goal. Read-only — produces a draft that is
+      stored pending salesperson approval (config.outreach.require_approval)
+      before any send. The actual send is a separate confirm-gated action.
+    inputs:
+      type: object
+      required: [contact, goal]
+      properties:
+        contact: { type: object }
+        goal:    { type: string, description: "e.g. 'book a demo', 'follow up on proposal'" }
+        channel: { type: string, enum: [email, sms, linkedin], default: email }
+        interactions: { type: array, items: { type: object } }
+    outputs:
+      type: object
+      properties:
+        subject:    { type: string }
+        body:       { type: string }
+        confidence: { type: number, minimum: 0.0, maximum: 1.0 }
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: { requests_per_minute: 60 }
+    cost_estimate: { llm_tokens: 800, provider_cost_usd: 0.0016, compute_profile: low }
+    failure_modes: [empty_goal]
+
+  - name: advance_contact_stage
+    description: >
+      Move a contact to a new pipeline stage (e.g. qualified → proposal) and
+      record a stage_change interaction. A genuine state mutation in the company
+      CRM — gated behind confirm so the salesperson approves the advance.
+    inputs:
+      type: object
+      required: [contact_id, to_stage]
+      properties:
+        contact_id: { type: string, format: uuid }
+        to_stage:   { type: string, enum: [new, contacted, qualified, proposal, won, lost] }
+        reason:     { type: string }
+    outputs:
+      type: object
+      properties:
+        contact_id: { type: string, format: uuid }
+        stage:      { type: string }
+    side_effects:
+      - writes: [crm_contacts.stage, crm_interactions]
+    idempotent: true
+    action_class: confirm
+    requires_approval: confirm
+    rate_limit: { requests_per_minute: 60 }
+    cost_estimate: { llm_tokens: 0, provider_cost_usd: 0.0, compute_profile: low }
+    failure_modes: [contact_not_found, invalid_stage]

@@ -1,0 +1,133 @@
+# Billing & Subscriptions lego — NEXUS_PORTFOLIO_RUNTIME_SPEC §11 capability #4
+name: billing-and-subscriptions
+version: 1.0.0
+description: Full Stripe billing — checkout + subscriptions + webhook + customer portal + plan changes with proration + usage metering + dunning state machine + admin pages + React UI components + email templates. v1.0.0 is feature-complete per spec §11 capability #4.
+maintainer: nexus-platform
+status: beta
+compatibility:
+  min_runtime: 1.0.0
+  min_nexus_spec: 2.1.0
+depends_on:
+  - identity-and-access: ">=1.0.0"
+  - admin-console: ">=0.1.0"
+slots:
+  - name: checkout_extra_fields
+    description: Extra form fields injected into the checkout flow (e.g., promo code, referral source).
+    contract: react-component
+  - name: post_subscription_redirect
+    description: Server-side hook to redirect after successful subscription creation.
+    contract: server-hook
+  - name: subscription_extra_metadata
+    description: Per-subscription metadata fields appended to the Stripe subscription record.
+    contract: react-component
+config_schema:
+  type: object
+  required:
+    - stripe_publishable_key
+    - default_currency
+    - tier_ladder
+  properties:
+    stripe_publishable_key:
+      type: string
+      description: Stripe publishable key (pk_live_... or pk_test_...). Secret key is read from env STRIPE_SECRET_KEY.
+    default_currency:
+      type: string
+      enum: [usd, eur, gbp, cad, aud]
+      default: usd
+      description: Default currency for new subscriptions.
+    tier_ladder:
+      type: array
+      description: Pricing tiers exposed in checkout. Maps to chairman's $14/$24/$59/$99 ladder by default.
+      items:
+        type: object
+        required: [name, price_id, amount, interval]
+        properties:
+          name: { type: string }
+          price_id: { type: string, description: "Stripe Price ID (price_...)" }
+          amount: { type: integer, description: "Cents" }
+          interval: { type: string, enum: [month, year] }
+    trial_days:
+      type: integer
+      minimum: 0
+      maximum: 90
+      default: 0
+    enable_proration:
+      type: boolean
+      default: true
+required_config: true
+runtime:
+  events:
+    subscribes_to: []
+    emits:
+      - billing.checkout_session_created
+      - billing.subscription_created
+      - billing.subscription_cancelled
+      - billing.subscription_updated
+      - billing.payment_succeeded
+      - billing.payment_failed
+      - billing.webhook_received
+      - billing.portal_session_created
+      - billing.plan_change_previewed
+      - billing.plan_change_applied
+      - billing.usage_event_recorded
+      - billing.dunning_state_changed
+      - billing.dunning_resolved
+      - billing.refund_issued
+  permissions:
+    required_roles: []
+    feature_flags:
+      - billing_enabled
+  experiments:
+    enabled: true
+    configurable: true
+  telemetry:
+    required_events:
+      - checkout_started
+      - checkout_completed
+      - checkout_abandoned
+      - subscription_created
+      - subscription_cancelled
+      - payment_succeeded
+      - payment_failed
+      - portal_opened
+      - plan_change_previewed
+      - plan_change_applied
+      - usage_event_recorded
+      - dunning_state_changed
+      - admin_subscription_cancelled
+      - admin_refund_issued
+  cost:
+    compute_profile: low
+    billable: true
+identity_constraints:
+  allowed_categories: ["*"]
+  restricted_use_cases: []
+adapters:
+  default: stripe
+  supported: [stripe]
+economics:
+  tracked_metrics:
+    - active_subscriptions_count
+    - mrr_cents
+    - churn_rate
+    - failed_payment_rate
+    - checkout_conversion_rate
+env:
+  required:
+    - DATABASE_URL
+    - STRIPE_SECRET_KEY
+    - STRIPE_WEBHOOK_SECRET
+  optional:
+    - STRIPE_API_VERSION
+migrations:
+  required: true
+  reversible: false
+admin:
+  sections:
+    - name: Billing
+      order: 40
+      permissions: [admin, owner]
+      routes:
+        - /admin/billing
+        - /admin/billing/subscriptions
+        - /admin/billing/subscriptions/{id}

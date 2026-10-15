@@ -1,0 +1,98 @@
+# Agent-callable tools exported by the onboarding lego.
+lego_name: onboarding
+version: 1.0.0
+
+tools:
+  - name: recommend_onboarding_path
+    description: >
+      Given a new user's role + signup context, recommend the ordered onboarding
+      steps most likely to reach activation. Read-only.
+    inputs:
+      type: object
+      required: [user_context]
+      properties:
+        user_context: { type: object, description: "{ role?, source?, plan? }" }
+        available_steps: { type: array, items: { type: string } }
+    outputs:
+      type: object
+      properties:
+        recommended_steps: { type: array, items: { type: string } }
+        rationale:         { type: string }
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: { requests_per_minute: 60 }
+    cost_estimate: { llm_tokens: 350, provider_cost_usd: 0.0007, compute_profile: low }
+    failure_modes: [no_context]
+
+  - name: detect_onboarding_dropoff
+    description: >
+      Evaluate a user's onboarding progress for drop-off risk (stalled step,
+      time-since-last-step) + recommend a re-engagement nudge. Read-only.
+    inputs:
+      type: object
+      required: [progress]
+      properties:
+        progress: { type: array, items: { type: object }, description: "[{ step_key, status, completed_at }]" }
+        days_since_signup: { type: integer }
+    outputs:
+      type: object
+      properties:
+        at_risk:    { type: boolean }
+        stalled_at: { type: string }
+        nudge:      { type: string }
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: { requests_per_minute: 60 }
+    cost_estimate: { llm_tokens: 300, provider_cost_usd: 0.0006, compute_profile: low }
+    failure_modes: [no_progress]
+
+  - name: suggest_next_onboarding_step
+    description: >
+      Pick the single best next onboarding step for a user + a one-line prompt.
+      Read-only.
+    inputs:
+      type: object
+      required: [progress]
+      properties:
+        progress: { type: array, items: { type: object } }
+    outputs:
+      type: object
+      properties:
+        next_step: { type: string }
+        prompt:    { type: string }
+    side_effects: false
+    idempotent: true
+    action_class: none
+    requires_approval: false
+    rate_limit: { requests_per_minute: 120 }
+    cost_estimate: { llm_tokens: 200, provider_cost_usd: 0.0004, compute_profile: low }
+    failure_modes: [all_complete]
+
+  - name: provision_sample_data
+    description: >
+      Provision demo/sample data for a user's first-run experience. A genuine
+      state mutation (writes sample rows into the company DB) — gated behind
+      confirm so the user opts into seeded sample data.
+    inputs:
+      type: object
+      required: [user_id]
+      properties:
+        user_id: { type: string, format: uuid }
+        dataset: { type: string, description: "Named sample dataset" }
+    outputs:
+      type: object
+      properties:
+        run_id: { type: string, format: uuid }
+        status: { type: string }
+    side_effects:
+      - writes: [onboarding_sample_data_runs]
+    idempotent: false
+    action_class: confirm
+    requires_approval: confirm
+    rate_limit: { requests_per_minute: 10 }
+    cost_estimate: { llm_tokens: 0, provider_cost_usd: 0.0, compute_profile: low }
+    failure_modes: [user_not_found, sample_data_disabled]

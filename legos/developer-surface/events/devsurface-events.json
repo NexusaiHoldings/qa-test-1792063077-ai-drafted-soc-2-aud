@@ -1,0 +1,10 @@
+{
+  "lego_name": "developer-surface",
+  "version": "1.0.0",
+  "description": "Typed event definitions for the developer-surface lego (spec §7.6).",
+  "events": [
+    { "name": "api.key_created", "required": ["api_key_id"], "properties": { "api_key_id": "uuid" } },
+    { "name": "api.key_revoked", "required": ["api_key_id"], "properties": { "api_key_id": "uuid", "reason": "string" } },
+    { "name": "webhook.delivery_failed", "required": ["webhook_id"], "properties": { "webhook_id": "uuid" } }
+  ]
+}

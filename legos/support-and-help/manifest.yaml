@@ -1,0 +1,83 @@
+# Support & Help lego — manifest.yaml
+# NEXUS_PORTFOLIO_RUNTIME_SPEC §11 capability #7 — support-and-help-buildout-001 (v1.0.0)
+name: support-and-help
+version: 1.0.0
+description: >
+  Knowledge base, in-app support widget, ticketing, AI deflection, and feedback —
+  the support pillar of every portfolio company. The §12 AI-as-Backbone flagship:
+  the agent runs first-line support (triage, draft, suggest KB, escalate) while
+  the operator supervises the queue. Ships full schema + API + admin + agent
+  tooling + UI.
+maintainer: nexus-platform
+status: beta
+
+compatibility:
+  min_runtime: 1.0.0
+  min_nexus_spec: 2.1.0
+
+# Identity provides the user a ticket is attributed to; notifications delivers
+# ticket-update emails. Both are real legos bundled in every substrate.
+depends_on:
+  - identity-and-access
+  - notifications
+
+slots:
+  - name: support_widget_launcher
+    description: >
+      Floating launcher button injected into the substrate's app shell. Opens
+      the in-app SupportWidget (KB search + new-ticket form + ticket history).
+    contract: react-component
+
+  - name: help_center_link
+    description: >
+      Nav/footer link to the company's help center / KB index. Renders nothing
+      when the company has no published KB articles.
+    contract: react-component
+
+  - name: after_ticket_resolved_hook
+    description: >
+      Server hook executed when a ticket transitions to resolved — used to
+      trigger a CSAT feedback request via the notifications lego. No-op when
+      unconfigured.
+    contract: server-hook
+
+config_schema:
+  type: object
+  required:
+    - deflection
+    - escalation
+  properties:
+    deflection:
+      type: object
+      description: AI-deflection behavior — the agent attempts a KB-grounded answer before opening a ticket.
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        min_kb_confidence:
+          type: number
+          description: Minimum suggest_kb_article relevance (0-1) before auto-deflecting instead of opening a ticket.
+          minimum: 0.0
+          maximum: 1.0
+          default: 0.7
+    escalation:
+      type: object
+      description: When the agent must hand a ticket to a human.
+      properties:
+        auto_escalate_priorities:
+          type: array
+          description: Ticket priorities the agent never auto-resolves (always escalates to a human queue).
+          items:
+            type: string
+            enum: [low, normal, high, urgent]
+          default: [high, urgent]
+        escalation_channel:
+          type: string
+          description: Where escalations land (e.g. a Slack channel or email alias). Substrate-resolved.
+    kb:
+      type: object
+      properties:
+        public:
+          type: boolean
+          description: Whether the KB index is publicly browsable (vs auth-gated).
+          default: true

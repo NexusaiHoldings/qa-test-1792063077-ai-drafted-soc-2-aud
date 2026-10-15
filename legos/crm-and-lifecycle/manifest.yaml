@@ -1,0 +1,81 @@
+# CRM & Lifecycle lego — manifest.yaml
+# NEXUS_PORTFOLIO_RUNTIME_SPEC §11 capability #15 — crm-and-lifecycle-buildout-001 (v1.0.0)
+name: crm-and-lifecycle
+version: 1.0.0
+description: >
+  Contact/lead model, lead capture, attribution, pipeline stages, segmentation,
+  and campaigns. A §12 AI-as-Backbone showcase: the agent runs the pipeline
+  (scores leads, drafts outreach, summarizes history, proposes next actions);
+  the salesperson approves + personalizes. Ships schema + API + admin + agent
+  tooling + UI.
+maintainer: nexus-platform
+status: beta
+
+compatibility:
+  min_runtime: 1.0.0
+  min_nexus_spec: 2.1.0
+
+# Identity attributes a contact to a user/owner; notifications sends outreach.
+depends_on:
+  - identity-and-access
+  - notifications
+
+slots:
+  - name: lead_capture_form
+    description: >
+      Embeddable lead-capture form (name/email/source) for marketing pages.
+      Posts to the lego's lead-capture API; the agent triages + scores on arrival.
+    contract: react-component
+
+  - name: contact_sidebar
+    description: >
+      Contact detail sidebar (history + AI-proposed next action) shown on a
+      contact record. Renders the agent's propose_next_action recommendation.
+    contract: react-component
+
+  - name: after_lead_captured_hook
+    description: >
+      Server hook fired when a new lead is captured — triggers agent scoring +
+      (optionally) an outreach draft. No-op when unconfigured.
+    contract: server-hook
+
+config_schema:
+  type: object
+  required:
+    - pipeline
+    - outreach
+  properties:
+    pipeline:
+      type: object
+      properties:
+        stages:
+          type: array
+          description: Ordered pipeline stage names.
+          items:
+            type: string
+          default: [new, contacted, qualified, proposal, won, lost]
+        auto_advance:
+          type: boolean
+          description: Whether the agent may advance a contact's stage without approval.
+          default: false
+    outreach:
+      type: object
+      properties:
+        require_approval:
+          type: boolean
+          description: Whether agent-drafted outreach must be approved before sending.
+          default: true
+        daily_send_cap:
+          type: integer
+          description: Max agent-initiated outreach sends per day (0 = unlimited).
+          minimum: 0
+          default: 50
+    scoring:
+      type: object
+      properties:
+        hot_lead_threshold:
+          type: number
+          description: score_lead value (0-100) above which a lead is flagged hot.
+          minimum: 0
+          maximum: 100
+          default: 70

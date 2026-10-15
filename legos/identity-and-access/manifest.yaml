@@ -1,0 +1,180 @@
+# Identity & Access lego — manifest.yaml
+# NEXUS_PORTFOLIO_RUNTIME_SPEC §4.3 — Sprint 2.3 (feature-complete; v1.0.0)
+name: identity-and-access
+version: 1.0.0
+description: >
+  Auth, sessions, password policy, account lifecycle management, OAuth (Google + GitHub),
+  admin user management, and GDPR-compliant account deletion —
+  the identity pillar of every portfolio company. Ships full UI + admin + agent tooling.
+maintainer: nexus-platform
+status: beta
+
+compatibility:
+  min_runtime: 1.0.0
+  min_nexus_spec: 2.1.0
+
+depends_on: []
+
+slots:
+  - name: before_signup_fields
+    description: >
+      Inject custom fields or UI elements above the standard email/password
+      inputs on the signup form.
+    contract: react-component
+
+  - name: signup_legal_acknowledgment
+    description: >
+      Legal acknowledgment block shown at the bottom of the signup form.
+      Defaults to a standard ToS + privacy placeholder; full email-linked
+      template lands in 2.2.
+    contract: react-component
+
+  - name: after_login_redirect
+    description: >
+      Server hook executed after a successful login to determine where to
+      redirect the user. Falls back to /dashboard when not configured.
+    contract: server-hook
+
+config_schema:
+  type: object
+  required:
+    - providers
+    - password_policy
+  properties:
+    providers:
+      type: array
+      description: Authentication providers to enable
+      items:
+        type: string
+        enum:
+          - email
+          - google_oauth
+          - github_oauth
+          - passkey
+          - totp
+    password_policy:
+      type: object
+      description: Password strength requirements
+      properties:
+        min_length:
+          type: integer
+        require_uppercase:
+          type: boolean
+        require_digit:
+          type: boolean
+        require_special:
+          type: boolean
+    mfa:
+      type: object
+      description: MFA configuration (wired in 2.2)
+      properties:
+        enabled:
+          type: boolean
+        enforcement:
+          type: string
+
+required_config: true
+
+runtime:
+  events:
+    subscribes_to: []
+    emits:
+      - user.created
+      - user.signed_in
+      - user.signed_out
+      - user.suspicious_login_detected
+      - user.password_reset_requested
+      - user.password_reset_completed
+      - user.mfa_enrolled
+      - user.mfa_challenge_succeeded
+      - user.mfa_challenge_failed
+      - user.oauth_signup
+      - user.oauth_login
+      - user.deletion_requested
+      - user.deletion_cancelled
+      - user.deleted
+      - user.session_revoked
+      - user.sessions_admin_revoked
+      - user.mfa_factor_admin_revoked
+
+  permissions:
+    required_roles: []
+    feature_flags:
+      - mfa_enforcement
+
+  experiments:
+    enabled: true
+    configurable: true
+
+  telemetry:
+    required_events:
+      - signup_started
+      - signup_completed
+      - signup_failed
+      - login_attempted
+      - login_succeeded
+      - login_failed
+      - password_reset_started
+      - password_reset_completed
+      - mfa_enrollment_started
+      - mfa_enrollment_completed
+      - mfa_challenge_succeeded
+      - mfa_challenge_failed
+      - oauth_started
+      - oauth_succeeded
+      - oauth_failed
+      - account_deletion_requested
+      - account_deletion_cancelled
+      - session_revoked
+
+  cost:
+    compute_profile: low
+    billable: true
+
+identity_constraints:
+  allowed_categories:
+    - "*"
+  restricted_use_cases: []
+
+adapters:
+  default: roll_your_own
+  supported:
+    - clerk
+    - supabase_auth
+    - auth0
+
+economics:
+  tracked_metrics:
+    - usage_count
+    - signup_conversion_rate
+    - failed_login_rate
+    - cost_per_action
+
+env:
+  required:
+    - DATABASE_URL
+    - SESSION_SECRET
+  optional:
+    - GOOGLE_OAUTH_CLIENT_ID
+    - GOOGLE_OAUTH_CLIENT_SECRET
+    - GITHUB_OAUTH_CLIENT_ID
+    - GITHUB_OAUTH_CLIENT_SECRET
+    - OAUTH_STUB_MODE
+
+migrations:
+  required: true
+  reversible: false
+
+admin:
+  sections:
+    - name: Users
+      order: 1
+      permissions:
+        - admin
+        - owner
+      routes:
+        - /admin/users
+        - /admin/users/{id}
+        - /admin/users/{id}/mfa-factors/{factor_id}/revoke
+        - /admin/users/{id}/sessions/revoke-all
+        - /admin/users/{id}/force-deletion

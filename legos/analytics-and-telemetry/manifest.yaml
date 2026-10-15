@@ -1,0 +1,38 @@
+# Analytics & Telemetry lego — manifest.yaml
+# NEXUS_PORTFOLIO_RUNTIME_SPEC §11 capability #13 — analytics-and-telemetry-buildout-001 (v1.0.0)
+name: analytics-and-telemetry
+version: 1.0.0
+description: >
+  Event taxonomy, funnels, retention, and error tracking. Agent tools summarize
+  funnel performance, detect metric anomalies, recommend events to track, and
+  explain retention drops. Read-only analytics surface. Ships schema + API +
+  admin + agent tooling + UI.
+maintainer: nexus-platform
+status: beta
+compatibility:
+  min_runtime: 1.0.0
+  min_nexus_spec: 2.1.0
+depends_on:
+  - identity-and-access
+slots:
+  - name: analytics_dashboard
+    description: Metrics dashboard widget (funnels + key counts).
+    contract: react-component
+config_schema:
+  type: object
+  required:
+    - events
+  properties:
+    events:
+      type: object
+      properties:
+        taxonomy:
+          type: array
+          description: Canonical event names the product emits.
+          items: { type: string }
+          default: [page_view, sign_up, activation, purchase]
+    funnels:
+      type: array
+      description: Named funnels as ordered event-name lists.
+      items: { type: object }
+      default: []

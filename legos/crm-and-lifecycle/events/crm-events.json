@@ -1,0 +1,27 @@
+{
+  "lego_name": "crm-and-lifecycle",
+  "version": "1.0.0",
+  "description": "Typed event definitions for the crm-and-lifecycle lego (spec §7.6).",
+  "events": [
+    {
+      "name": "lead.captured",
+      "required": ["contact_id"],
+      "properties": { "contact_id": "uuid", "source": "string" }
+    },
+    {
+      "name": "contact.stage_changed",
+      "required": ["contact_id", "stage"],
+      "properties": { "contact_id": "uuid", "stage": "string" }
+    },
+    {
+      "name": "contact.interaction_logged",
+      "required": ["contact_id", "kind"],
+      "properties": { "contact_id": "uuid", "kind": "string" }
+    },
+    {
+      "name": "outreach.sent",
+      "required": ["draft_id", "contact_id"],
+      "properties": { "draft_id": "uuid", "contact_id": "uuid" }
+    }
+  ]
+}

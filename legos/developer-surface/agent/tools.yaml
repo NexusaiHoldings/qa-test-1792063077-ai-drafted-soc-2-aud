@@ -1,0 +1,97 @@
+# Agent-callable tools exported by the developer-surface lego.
+lego_name: developer-surface
+version: 1.0.0
+
+tools:
+  - name: summarize_api_usage
+    description: >
+      Summarize API usage for a key/account over a window: request volume, top
+      endpoints, error rate, and a one-line health verdict. Read-only.
+    inputs:
+      type: object
+      required: [request_log]
+      properties:
+        request_log: { type: array, items: { type: object } }
+    outputs:
+      type: object
+      properties:
+        summary:    { type: string }
+        error_rate: { type: number }
+        top_endpoints: { type: array, items: { type: string } }
+    side_effects: false
+    idempotent: true
+    action_class: none
+    requires_approval: false
+    rate_limit: { requests_per_minute: 60 }
+    cost_estimate: { llm_tokens: 400, provider_cost_usd: 0.0008, compute_profile: low }
+    failure_modes: [no_requests]
+
+  - name: detect_anomalous_api_traffic
+    description: >
+      Evaluate recent API traffic for anomalies (spike, scraping pattern, auth
+      failures, unusual geo). Returns flagged anomalies + risk. Read-only.
+    inputs:
+      type: object
+      required: [request_log]
+      properties:
+        request_log: { type: array, items: { type: object } }
+    outputs:
+      type: object
+      properties:
+        anomalies:  { type: array, items: { type: string } }
+        risk_level: { type: string, enum: [low, medium, high] }
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: { requests_per_minute: 60 }
+    cost_estimate: { llm_tokens: 500, provider_cost_usd: 0.001, compute_profile: low }
+    failure_modes: [insufficient_data]
+
+  - name: recommend_rate_limit
+    description: >
+      Recommend a per-key rate limit from observed usage + the product's
+      capacity profile. Read-only recommendation.
+    inputs:
+      type: object
+      required: [observed_rpm]
+      properties:
+        observed_rpm: { type: number }
+        plan:         { type: string }
+    outputs:
+      type: object
+      properties:
+        recommended_rpm: { type: integer }
+        rationale:       { type: string }
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: { requests_per_minute: 60 }
+    cost_estimate: { llm_tokens: 250, provider_cost_usd: 0.0005, compute_profile: low }
+    failure_modes: [no_data]
+
+  - name: revoke_api_key
+    description: >
+      Revoke an API key (flips status to 'revoked'). A genuine state mutation —
+      gated behind confirm so a developer/operator approves cutting off a key
+      (e.g. after detecting a leak).
+    inputs:
+      type: object
+      required: [api_key_id, reason]
+      properties:
+        api_key_id: { type: string, format: uuid }
+        reason:     { type: string }
+    outputs:
+      type: object
+      properties:
+        api_key_id: { type: string, format: uuid }
+        status:     { type: string }
+    side_effects:
+      - writes: [api_keys.status]
+    idempotent: true
+    action_class: confirm
+    requires_approval: confirm
+    rate_limit: { requests_per_minute: 30 }
+    cost_estimate: { llm_tokens: 0, provider_cost_usd: 0.0, compute_profile: low }
+    failure_modes: [key_not_found]

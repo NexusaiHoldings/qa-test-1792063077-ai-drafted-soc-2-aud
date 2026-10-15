@@ -1,0 +1,121 @@
+# Agent-callable tools exported by the social-and-engagement lego.
+lego_name: social-and-engagement
+version: 1.0.0
+
+tools:
+  - name: moderate_comment
+    description: >
+      Evaluate a comment for moderation: toxicity, spam, off-topic. Returns a
+      verdict (allow/flag/hide) + reason + confidence. Read-only — the verdict
+      is surfaced; hiding is a separate confirm-gated action.
+    inputs:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string }
+        context: { type: string, description: "Optional entity/thread context" }
+    outputs:
+      type: object
+      properties:
+        verdict:    { type: string, enum: [allow, flag, hide] }
+        reason:     { type: string }
+        confidence: { type: number, minimum: 0.0, maximum: 1.0 }
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: { requests_per_minute: 200 }
+    cost_estimate: { llm_tokens: 300, provider_cost_usd: 0.0006, compute_profile: low }
+    failure_modes: [empty_body]
+
+  - name: summarize_review_sentiment
+    description: >
+      Summarize the sentiment of a set of reviews/comments: overall score,
+      themes, and notable quotes. Read-only.
+    inputs:
+      type: object
+      required: [reviews]
+      properties:
+        reviews: { type: array, items: { type: object } }
+    outputs:
+      type: object
+      properties:
+        overall_sentiment: { type: string, enum: [positive, mixed, negative] }
+        themes:            { type: array, items: { type: string } }
+    side_effects: false
+    idempotent: true
+    action_class: none
+    requires_approval: false
+    rate_limit: { requests_per_minute: 60 }
+    cost_estimate: { llm_tokens: 500, provider_cost_usd: 0.001, compute_profile: low }
+    failure_modes: [no_reviews]
+
+  - name: detect_spam_engagement
+    description: >
+      Evaluate engagement (reactions/comments) for inauthentic patterns
+      (bursts, duplicate authors, bot signatures). Returns flagged signals +
+      risk. Read-only.
+    inputs:
+      type: object
+      required: [engagement_events]
+      properties:
+        engagement_events: { type: array, items: { type: object } }
+    outputs:
+      type: object
+      properties:
+        flags:      { type: array, items: { type: string } }
+        risk_level: { type: string, enum: [low, medium, high] }
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: { requests_per_minute: 60 }
+    cost_estimate: { llm_tokens: 400, provider_cost_usd: 0.0008, compute_profile: low }
+    failure_modes: [no_events]
+
+  - name: suggest_referral_reward
+    description: >
+      Given a referral's conversion context + the company's reward policy,
+      suggest an appropriate reward + reasoning. Read-only recommendation.
+    inputs:
+      type: object
+      required: [referral]
+      properties:
+        referral:      { type: object }
+        reward_policy: { type: object }
+    outputs:
+      type: object
+      properties:
+        suggested_reward: { type: string }
+        rationale:        { type: string }
+    side_effects: false
+    idempotent: true
+    action_class: notify
+    requires_approval: false
+    rate_limit: { requests_per_minute: 60 }
+    cost_estimate: { llm_tokens: 300, provider_cost_usd: 0.0006, compute_profile: low }
+    failure_modes: [no_referral]
+
+  - name: hide_comment
+    description: >
+      Hide a comment (flips status to 'hidden'). A genuine moderation mutation —
+      gated behind confirm so a moderator approves hiding user content.
+    inputs:
+      type: object
+      required: [comment_id, reason]
+      properties:
+        comment_id: { type: string, format: uuid }
+        reason:     { type: string }
+    outputs:
+      type: object
+      properties:
+        comment_id: { type: string, format: uuid }
+        status:     { type: string }
+    side_effects:
+      - writes: [social_comments.status]
+    idempotent: true
+    action_class: confirm
+    requires_approval: confirm
+    rate_limit: { requests_per_minute: 60 }
+    cost_estimate: { llm_tokens: 0, provider_cost_usd: 0.0, compute_profile: low }
+    failure_modes: [comment_not_found]

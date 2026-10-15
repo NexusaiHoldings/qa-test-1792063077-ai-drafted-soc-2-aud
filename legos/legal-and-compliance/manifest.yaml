@@ -1,0 +1,135 @@
+# Legal & Compliance lego — NEXUS_PORTFOLIO_RUNTIME_SPEC §11 capability #5 + §8
+name: legal-and-compliance
+version: 0.1.0
+description: >
+  ToS, privacy policy, cookie banner, GDPR/CCPA/accessibility statements, version-tracked
+  acknowledgments, and liability-boundary-aware disclosure flows for every portfolio company.
+  Ships document management + cookie consent + signup acknowledgment slot + admin contribution.
+maintainer: nexus-platform
+status: alpha
+
+compatibility:
+  min_runtime: 1.0.0
+  min_nexus_spec: 2.1.0
+
+depends_on:
+  - identity-and-access: ">=1.0.0"
+  - admin-console: ">=0.1.0"
+
+slots:
+  - name: extra_legal_links
+    description: >
+      Additional links injected into the site footer alongside the standard
+      Terms / Privacy / Cookie Policy links. Other legos may inject their own
+      compliance links here (e.g. sub-processor list, DPA download).
+    contract: react-component
+
+  - name: policy_addendum_terms_of_service
+    description: >
+      Addendum injected at the end of the Terms of Service document.
+      Use for company-specific clauses that cannot go in the base template.
+    contract: server-hook
+
+  - name: policy_addendum_privacy_policy
+    description: >
+      Addendum injected at the end of the Privacy Policy document.
+    contract: server-hook
+
+  - name: policy_addendum_cookie_policy
+    description: >
+      Addendum injected at the end of the Cookie Policy document.
+    contract: server-hook
+
+  - name: policy_addendum_accessibility_statement
+    description: >
+      Addendum injected at the end of the Accessibility Statement document.
+    contract: server-hook
+
+config_schema:
+  type: object
+  required:
+    - jurisdiction
+    - cookie_banner_enabled
+    - liability_boundary_class
+  properties:
+    jurisdiction:
+      type: string
+      description: Primary legal jurisdiction for this company's documents.
+      enum: [us, eu, uk, ca, au, global]
+      default: us
+    cookie_banner_enabled:
+      type: boolean
+      description: Show cookie consent banner to new visitors.
+      default: true
+    liability_boundary_class:
+      type: string
+      description: >
+        Mirrors spec §8. Controls strictness of disclosure flows.
+        regulated_advisor and fiduciary companies get additional disclosure
+        requirements wired into every external communication.
+      enum: [tool, assistant, fiduciary, regulated_advisor]
+      default: assistant
+
+required_config: true
+
+runtime:
+  events:
+    subscribes_to: []
+    emits:
+      - legal.document_published
+      - legal.user_acknowledged
+      - legal.version_force_reacknowledged
+      - legal.cookie_consent_given
+      - legal.cookie_consent_declined
+
+  permissions:
+    required_roles:
+      - admin
+      - owner
+    feature_flags: []
+
+  experiments:
+    enabled: false
+    configurable: false
+
+  telemetry:
+    required_events:
+      - legal_doc_viewed
+      - legal_acknowledgment_completed
+      - cookie_banner_shown
+      - cookie_consent_action
+
+  cost:
+    compute_profile: low
+    billable: true
+
+identity_constraints:
+  allowed_categories:
+    - "*"
+  restricted_use_cases: []
+
+adapters:
+  default: roll_your_own
+  supported: []
+
+economics:
+  tracked_metrics:
+    - acknowledgment_count
+    - doc_publishes
+    - cookie_consent_rate
+
+env:
+  required:
+    - DATABASE_URL
+  optional: []
+
+migrations:
+  required: true
+  reversible: false
+
+admin:
+  sections:
+    - name: Legal
+      order: 30
+      permissions: [admin, owner]
+      routes: [/admin/legal, "/admin/legal/{doc_type}"]

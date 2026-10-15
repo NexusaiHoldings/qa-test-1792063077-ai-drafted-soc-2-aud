@@ -1,0 +1,67 @@
+# Feedback lego — feedback-to-build-loop-001
+# Self-service "Feedback → Build" loop: any signed-in user submits feedback via a
+# FAB; Nexus triages it; the company admin reviews a recommendation + history and
+# clicks Build/Revise/Discuss/Decline; Build fires the live-company-change-request
+# pipeline against the company repo → auto-merge → deploy → status reconciles done.
+name: feedback
+version: 0.1.0
+description: In-app feedback capture (FAB) + admin triage/review tab that drives the Nexus coding pipeline. Users submit bug/edit/idea feedback; Nexus triages with a recommendation; the company admin approves a Build in-app and the change ships through the live-company-change-request flow.
+maintainer: nexus-platform
+status: alpha
+compatibility:
+  min_runtime: 1.0.0
+  min_nexus_spec: 2.1.0
+depends_on:
+  - identity-and-access: ">=1.0.0"
+  - admin-console: ">=0.1.0"
+slots:
+  - name: feedback_widget_launcher
+    description: Floating action button mounted in the app layout that opens the feedback composer.
+    contract: react-component
+config_schema:
+  type: object
+  properties:
+    enabled:
+      type: boolean
+      default: true
+      description: Master switch for the feedback FAB + admin tab.
+    allowed_types:
+      type: array
+      default: [bug, edit, idea]
+      description: Feedback categories offered in the composer.
+      items:
+        type: string
+        enum: [bug, edit, idea]
+required_config: false
+runtime:
+  events:
+    subscribes_to: []
+    emits:
+      - feedback.submitted
+      - feedback.action
+      - feedback.answer
+  permissions:
+    required_roles: []
+    feature_flags:
+      - feedback_enabled
+  telemetry:
+    required_events:
+      - feedback_submitted
+      - feedback_actioned
+identity_constraints:
+  allowed_categories: ["*"]
+  restricted_use_cases: []
+env:
+  required:
+    - DATABASE_URL
+  optional: []
+migrations:
+  required: true
+  reversible: false
+admin:
+  sections:
+    - name: Feedback
+      order: 45
+      permissions: [admin, owner]
+      routes:
+        - /admin/feedback

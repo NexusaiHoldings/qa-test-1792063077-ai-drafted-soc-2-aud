@@ -1,0 +1,40 @@
+# Files & Media lego — manifest.yaml
+# NEXUS_PORTFOLIO_RUNTIME_SPEC §11 capability #10 — files-and-media-buildout-001 (v1.0.0)
+name: files-and-media
+version: 1.0.0
+description: >
+  File upload, image processing, virus-scan status, signed URLs, and CSV
+  import/export. §12 agent tools categorize uploads, extract structured data,
+  and flag dataset anomalies on arrival. Ships schema + API + admin + agent
+  tooling + UI.
+maintainer: nexus-platform
+status: beta
+compatibility:
+  min_runtime: 1.0.0
+  min_nexus_spec: 2.1.0
+depends_on:
+  - identity-and-access
+slots:
+  - name: file_uploader
+    description: Drag-and-drop file upload widget with progress + scan status.
+    contract: react-component
+  - name: file_list
+    description: User's file list with category + download.
+    contract: react-component
+config_schema:
+  type: object
+  required:
+    - storage
+  properties:
+    storage:
+      type: object
+      properties:
+        max_file_mb: { type: integer, default: 25 }
+        allowed_types:
+          type: array
+          items: { type: string }
+          default: [image/png, image/jpeg, application/pdf, text/csv]
+    virus_scan:
+      type: object
+      properties:
+        required: { type: boolean, default: true }

@@ -1,0 +1,449 @@
+/* Substrate global styles — functional, user-friendly baseline.
+ *
+ * substrate-ui-baseline-001 (2026-06-09). Goal: ANY page rendered inside
+ * <main> — template pages, lego components, or agent-generated domain pages —
+ * gets a readable, padded, professionally-spaced layout WITHOUT each page
+ * having to ship its own styling. Monochrome by design; per-company color
+ * theming layers on top later via packages/ui design tokens.
+ *
+ * Strategy: a centered content container on <main> + element-level defaults
+ * SCOPED under `main` (so the inline-styled TopNav / Footer / widgets that live
+ * outside <main> are never touched). Agents emit semantic HTML (h1/p/form/
+ * input/button/table/ul); styling those elements is what makes their output
+ * look finished with zero extra work.
+ */
+
+/* Default token values (the `generic` theme). At provisioning, app/layout.tsx
+ * injects a :root <style> override from the company's resolved ThemeContract
+ * (company-theme-authoring-001), so a themed company overrides these. NO OS
+ * dark-mode block: themes are authoritative (a dark brand declares its own
+ * color.bg); we never key palette off prefers-color-scheme. */
+:root {
+  --substrate-bg: #ffffff;
+  --substrate-fg: #111111;
+  --substrate-muted: #555555;
+  --substrate-accent: #2563eb;
+  --substrate-accent-text: #ffffff;
+  --substrate-danger: #c0341d;
+  --substrate-success: #15803d;
+  --substrate-border: #e2e2e2;
+  --substrate-border-strong: #c9c9c9;
+  --substrate-surface: #fafafa;
+  --substrate-surface-2: #f4f4f4;
+  --substrate-radius: 8px;
+  --substrate-radius-lg: 16px;
+  --substrate-control-h: 38px;
+  --substrate-max-width: 1080px;
+  --substrate-font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --substrate-font-heading: var(--substrate-font-body);
+
+  /* Elevation + motion (design-system-enrichment-001). These are NOT color
+   * tokens, so the per-company ThemeContract override never touches them —
+   * every company, themed or generic, inherits the same depth + motion. The
+   * design-QA gate scored depth/motion near zero on the flat baseline; these
+   * give cards real surface and interactive elements real feedback. */
+  --substrate-shadow-sm: 0 1px 2px rgba(17, 17, 17, 0.06);
+  --substrate-shadow: 0 4px 12px rgba(17, 17, 17, 0.08), 0 1px 3px rgba(17, 17, 17, 0.05);
+  --substrate-shadow-lg: 0 16px 40px rgba(17, 17, 17, 0.14), 0 4px 12px rgba(17, 17, 17, 0.08);
+  --substrate-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --substrate-dur: 0.18s;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  font-family: var(--substrate-font-body);
+  background: var(--substrate-bg);
+  color: var(--substrate-fg);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Content container — the fix for flush-left, cut-off page content ──────── */
+main {
+  display: block;
+  max-width: var(--substrate-max-width);
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+  min-height: 60vh;
+}
+
+/* ── Typography ────────────────────────────────────────────────────────────── */
+main h1,
+main h2,
+main h3 {
+  font-family: var(--substrate-font-heading);
+}
+main h1 {
+  font-size: 1.875rem;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin-bottom: 0.35rem;
+}
+main h2 {
+  font-size: 1.35rem;
+  line-height: 1.3;
+  font-weight: 650;
+  margin: 1.75rem 0 0.5rem;
+}
+main h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 1.25rem 0 0.4rem;
+}
+/* The standard "page title + lead description" pattern: the lead <p> directly
+   under the page <h1> reads as a muted subtitle. */
+main h1 + p {
+  color: var(--substrate-muted);
+  font-size: 1.0625rem;
+  margin-bottom: 1.5rem;
+}
+main p {
+  margin-bottom: 1rem;
+}
+main a {
+  color: var(--substrate-accent);
+  text-decoration: none;
+}
+main a:hover {
+  text-decoration: underline;
+}
+main small {
+  color: var(--substrate-muted);
+}
+
+/* ── Forms & controls — raw browser defaults → finished controls ──────────── */
+main label {
+  display: inline-block;
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+main input,
+main select,
+main textarea {
+  font: inherit;
+  color: inherit;
+  background: var(--substrate-bg);
+  border: 1px solid var(--substrate-border-strong);
+  border-radius: var(--substrate-radius);
+  padding: 0 0.75rem;
+  height: var(--substrate-control-h);
+  vertical-align: middle;
+  max-width: 100%;
+}
+main textarea {
+  height: auto;
+  padding: 0.6rem 0.75rem;
+  min-height: 96px;
+  line-height: 1.5;
+}
+main input::placeholder,
+main textarea::placeholder {
+  color: var(--substrate-muted);
+}
+main input:focus,
+main select:focus,
+main textarea:focus {
+  outline: none;
+  border-color: var(--substrate-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--substrate-accent) 22%, transparent);
+}
+
+/* Buttons (and links styled as buttons). Default button = filled neutral so a
+   bare <button>Search</button> reads as a real action, not raw chrome. */
+main button,
+main input[type="submit"],
+main input[type="button"],
+main .btn {
+  font: inherit;
+  font-weight: 550;
+  height: var(--substrate-control-h);
+  padding: 0 1rem;
+  /* Center the LABEL on both axes (top/bottom + left/right). Anchor-styled
+     buttons (<a class="btn">) are inline by default, so a fixed height left the
+     text vertically off-center; inline-flex centering fixes it consistently for
+     both <a> and <button>. (chairman direction 2026-06-24) */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border: 1px solid var(--substrate-accent);
+  border-radius: var(--substrate-radius);
+  background: var(--substrate-accent);
+  color: var(--substrate-accent-text);
+  cursor: pointer;
+  vertical-align: middle;
+  box-shadow: var(--substrate-shadow-sm);
+  transition: transform var(--substrate-dur) var(--substrate-ease),
+    box-shadow var(--substrate-dur) var(--substrate-ease),
+    opacity var(--substrate-dur) var(--substrate-ease);
+}
+main button:hover,
+main .btn:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+  box-shadow: var(--substrate-shadow);
+  text-decoration: none;
+}
+main button:active,
+main .btn:active {
+  transform: translateY(0);
+  box-shadow: var(--substrate-shadow-sm);
+}
+main button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+/* Secondary button variant */
+main button.secondary,
+main .btn.secondary {
+  background: var(--substrate-bg);
+  color: var(--substrate-fg);
+  border-color: var(--substrate-border-strong);
+}
+
+/* A horizontal control row (search/filter bars). Agents can add class="toolbar"
+   to a wrapping div/form; without it, controls still render individually clean. */
+main .toolbar,
+main form.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 1rem 0 1.5rem;
+}
+
+/* Vertical forms STACK by default — a plain <form> of label/input/select/
+   textarea/button (no wrapper divs) reads as a clean top-to-bottom form rather
+   than an inline-block jumble. `.toolbar` opts back into a horizontal row.
+   substrate-ui-baseline form-stacking fix (2026-06-10). */
+main form:not(.toolbar) {
+  max-width: 560px;
+}
+main form:not(.toolbar) label {
+  display: block;
+  margin: 1rem 0 0.3rem;
+}
+main form:not(.toolbar) input:not([type="checkbox"]):not([type="radio"]),
+main form:not(.toolbar) select,
+main form:not(.toolbar) textarea {
+  display: block;
+  width: 100%;
+}
+main form:not(.toolbar) button,
+main form:not(.toolbar) input[type="submit"] {
+  display: inline-block;
+  margin-top: 1.25rem;
+}
+
+/* ── Tables ───────────────────────────────────────────────────────────────── */
+main table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1rem 0 1.5rem;
+  font-size: 0.95rem;
+}
+main th,
+main td {
+  border: 1px solid var(--substrate-border);
+  padding: 0.55rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+main th {
+  background: var(--substrate-surface);
+  font-weight: 600;
+}
+main tbody tr:hover {
+  background: var(--substrate-surface);
+}
+
+/* ── Lists ────────────────────────────────────────────────────────────────── */
+main ul,
+main ol {
+  padding-left: 1.4rem;
+  margin-bottom: 1rem;
+}
+main li {
+  margin-bottom: 0.3rem;
+}
+
+/* ── Cards, surfaces & empty states — opt-in helpers agents/legos reach for ── */
+main .card {
+  border: 1px solid var(--substrate-border);
+  border-radius: var(--substrate-radius);
+  background: var(--substrate-bg);
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--substrate-shadow-sm);
+}
+/* Interactive / clickable cards lift on hover. Add class="card lift" (or
+   .feature-card, which is .lift by default) to opt a card into the motion. */
+main .card.lift,
+main .feature-card {
+  transition: transform var(--substrate-dur) var(--substrate-ease),
+    box-shadow var(--substrate-dur) var(--substrate-ease),
+    border-color var(--substrate-dur) var(--substrate-ease);
+}
+main .card.lift:hover,
+main .feature-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--substrate-shadow-lg);
+  border-color: var(--substrate-border-strong);
+}
+main .muted {
+  color: var(--substrate-muted);
+}
+main .danger {
+  color: var(--substrate-danger);
+}
+main .success {
+  color: var(--substrate-success);
+}
+/* Empty-state blocks (the "No properties yet…" pattern) read as a calm, bordered
+   panel when wrapped in .empty; bare text still inherits the muted look. */
+main .empty {
+  border: 1px dashed var(--substrate-border-strong);
+  border-radius: var(--substrate-radius);
+  padding: 2rem 1.5rem;
+  text-align: center;
+  color: var(--substrate-muted);
+  background: var(--substrate-surface);
+}
+main hr {
+  border: none;
+  border-top: 1px solid var(--substrate-border);
+  margin: 1.5rem 0;
+}
+main code {
+  background: var(--substrate-surface-2);
+  border-radius: 4px;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.9em;
+}
+
+/* ── Design-excellence layer (design-system-enrichment-001) ─────────────────
+ * Reusable, brand-aware building blocks for first-class pages: an eyebrow
+ * kicker, status pills, an elevated surface, a feature-card base, and an
+ * accent-tinted CTA band. The §3A design-QA gate scores depth, motion,
+ * hierarchy and content-craft — these give agents (and Landing.tsx) the
+ * primitives to clear the bar without per-company CSS. All accent-derived
+ * colors use color-mix so they track each company's ThemeContract. */
+main .eyebrow {
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--substrate-accent);
+  margin-bottom: 0.6rem;
+}
+main .pill,
+main .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--substrate-accent) 12%, transparent);
+  color: var(--substrate-accent);
+  border: 1px solid color-mix(in srgb, var(--substrate-accent) 24%, transparent);
+}
+main .pill.success {
+  background: color-mix(in srgb, var(--substrate-success) 14%, transparent);
+  color: var(--substrate-success);
+  border-color: color-mix(in srgb, var(--substrate-success) 28%, transparent);
+}
+main .pill.danger {
+  background: color-mix(in srgb, var(--substrate-danger) 12%, transparent);
+  color: var(--substrate-danger);
+  border-color: color-mix(in srgb, var(--substrate-danger) 26%, transparent);
+}
+/* An elevated surface panel — more presence than .card for primary content. */
+main .surface {
+  border: 1px solid var(--substrate-border);
+  border-radius: var(--substrate-radius-lg);
+  background: var(--substrate-bg);
+  box-shadow: var(--substrate-shadow);
+  padding: 1.75rem;
+  margin-bottom: 1.25rem;
+}
+/* Feature card base (Landing + feature grids). Hover-lift defined above. */
+main .feature-card {
+  border: 1px solid var(--substrate-border);
+  border-radius: var(--substrate-radius-lg);
+  background: var(--substrate-surface);
+  box-shadow: var(--substrate-shadow-sm);
+  padding: 1.5rem;
+}
+/* Accent-tinted CTA band — reads as a deliberate closing section, not a
+   bare bordered box. Subtle gradient from the brand accent. */
+main .cta-band {
+  border: 1px solid color-mix(in srgb, var(--substrate-accent) 22%, var(--substrate-border));
+  border-radius: var(--substrate-radius-lg);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--substrate-accent) 10%, var(--substrate-bg)),
+    color-mix(in srgb, var(--substrate-accent) 3%, var(--substrate-bg))
+  );
+  box-shadow: var(--substrate-shadow);
+}
+/* Respect reduced-motion: kill transforms/transitions for users who ask. */
+@media (prefers-reduced-motion: reduce) {
+  main button,
+  main .btn,
+  main .card.lift,
+  main .feature-card {
+    transition: none;
+  }
+  main button:hover,
+  main .btn:hover,
+  main .card.lift:hover,
+  main .feature-card:hover {
+    transform: none;
+  }
+}
+
+/* ── Site footer — rendered OUTSIDE <main> (so not covered by the rules above).
+ * The substrate Footer component is class-free semantic markup; styled here so
+ * it matches the TopNav (the substrate has no Tailwind — see Footer.tsx). ─── */
+footer {
+  border-top: 1px solid var(--substrate-border);
+  margin-top: 48px;
+  padding: 24px;
+  font-size: 0.9rem;
+  color: var(--substrate-muted);
+}
+footer > div {
+  max-width: var(--substrate-max-width);
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  align-items: center;
+  justify-content: space-between;
+}
+footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+footer a {
+  color: var(--substrate-muted);
+  text-decoration: none;
+}
+footer a:hover {
+  color: var(--substrate-fg);
+  text-decoration: underline;
+}
