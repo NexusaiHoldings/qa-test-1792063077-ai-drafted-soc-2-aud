@@ -248,3 +248,125 @@ CREATE INDEX IF NOT EXISTS idx_soc2_remediation_items_owner
   ON soc2_remediation_items (owner_user_id)
   WHERE owner_user_id IS NOT NULL;
 `;
+
+/**
+ * Evidence-Anchored Policy Drafting Studio (F1-007).
+ *
+ * ceo_briefing key_feature 2: "automated generation of the 10 most-requested
+ * SOC 2 policy documents ... tailored to the company's actual technical
+ * environment rather than generic templates", with ai_automation_core requiring
+ * "anchoring every policy clause to a retrieved evidence artifact".
+ *
+ * Model:
+ *   - soc2_policies            — one row per (org, policy_key): the current
+ *                                lifecycle state of a policy (not_started →
+ *                                drafting → drafted → in_review → approved) and a
+ *                                pointer to its current immutable version.
+ *   - soc2_policy_versions     — IMMUTABLE snapshots. A draft, a regenerate, an
+ *                                inline edit, or a status transition all append a
+ *                                NEW version row; existing rows are never mutated
+ *                                in place (content columns), so the audit trail
+ *                                of what the auditor eventually reviewed is intact.
+ *   - soc2_policy_clauses      — the clauses of a version. Each carries the
+ *                                controls it covers plus an `unanchored` flag; an
+ *                                unanchored clause is tinted and wears a
+ *                                "needs your input" chip in the editor.
+ *   - soc2_policy_clause_anchors — the evidence anchors: clause → the retrieved
+ *                                soc2_evidence_artifacts row that substantiates
+ *                                it. No anchor row is ever written for an
+ *                                artifact_id outside the org's own evidence set
+ *                                (hallucination guard in drafter.ts).
+ *   - soc2_policy_accepted_phrasings — prior human-accepted clause phrasings,
+ *                                recalled on the next draft (also mirrored to
+ *                                @nexus/memory-and-knowledge, best-effort).
+ *
+ * Every row is organization_id-scoped. No CHECK constraints on free-form text
+ * columns (per task constraints); the status vocabulary is enforced in
+ * application code (apps/web/lib/soc2/drafting/*).
+ */
+export const SOC2_POLICIES_DDL = `
+CREATE TABLE IF NOT EXISTS soc2_policies (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id     uuid NOT NULL,
+  policy_key          text NOT NULL,
+  title               text NOT NULL,
+  status              text NOT NULL DEFAULT 'not_started',
+  current_version_id  uuid,
+  current_version_no  integer NOT NULL DEFAULT 0,
+  last_drafted_at     timestamptz,
+  reviewed_by         uuid,
+  reviewed_at         timestamptz,
+  approved_by         uuid,
+  approved_at         timestamptz,
+  created_at          timestamptz NOT NULL DEFAULT now(),
+  updated_at          timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (organization_id, policy_key)
+);
+CREATE INDEX IF NOT EXISTS idx_soc2_policies_org
+  ON soc2_policies (organization_id, policy_key);
+
+CREATE TABLE IF NOT EXISTS soc2_policy_versions (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id     uuid NOT NULL,
+  policy_key          text NOT NULL,
+  version_no          integer NOT NULL,
+  status              text NOT NULL DEFAULT 'drafted',
+  title               text NOT NULL,
+  summary             text NOT NULL DEFAULT '',
+  source              text NOT NULL DEFAULT 'llm_gateway',
+  model               text,
+  clause_count        integer NOT NULL DEFAULT 0,
+  anchored_count      integer NOT NULL DEFAULT 0,
+  unanchored_count    integer NOT NULL DEFAULT 0,
+  drafted_by          uuid,
+  created_at          timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_soc2_policy_versions_policy
+  ON soc2_policy_versions (organization_id, policy_key, version_no DESC);
+
+CREATE TABLE IF NOT EXISTS soc2_policy_clauses (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  version_id          uuid NOT NULL,
+  organization_id     uuid NOT NULL,
+  clause_index        integer NOT NULL,
+  heading             text NOT NULL,
+  body                text NOT NULL,
+  control_codes       jsonb NOT NULL DEFAULT '[]'::jsonb,
+  unanchored          boolean NOT NULL DEFAULT false,
+  needs_input_reason  text,
+  edited_by_human     boolean NOT NULL DEFAULT false,
+  created_at          timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_soc2_policy_clauses_version
+  ON soc2_policy_clauses (version_id, clause_index);
+
+CREATE TABLE IF NOT EXISTS soc2_policy_clause_anchors (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  clause_id           uuid NOT NULL,
+  version_id          uuid NOT NULL,
+  organization_id     uuid NOT NULL,
+  artifact_id         uuid NOT NULL,
+  control_code        text,
+  label               text NOT NULL DEFAULT '',
+  snippet             text NOT NULL DEFAULT '',
+  created_at          timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_soc2_policy_clause_anchors_clause
+  ON soc2_policy_clause_anchors (clause_id);
+CREATE INDEX IF NOT EXISTS idx_soc2_policy_clause_anchors_artifact
+  ON soc2_policy_clause_anchors (artifact_id);
+
+CREATE TABLE IF NOT EXISTS soc2_policy_accepted_phrasings (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id     uuid NOT NULL,
+  policy_key          text NOT NULL,
+  heading             text NOT NULL,
+  body                text NOT NULL,
+  control_codes       jsonb NOT NULL DEFAULT '[]'::jsonb,
+  accepted_by         uuid,
+  version_id          uuid,
+  created_at          timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_soc2_policy_accepted_phrasings_policy
+  ON soc2_policy_accepted_phrasings (organization_id, policy_key, created_at DESC);
+`;
