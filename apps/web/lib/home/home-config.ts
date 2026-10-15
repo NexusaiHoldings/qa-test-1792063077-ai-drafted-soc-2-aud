@@ -125,7 +125,7 @@ export const homeConfig: HomeConfig = {
       },
       "secondaryCta": {
         "label": "See a sample report",
-        "href": "/sample-report"
+        "href": "/connections"
       },
       "image": {
         "url": "hero_image"
