@@ -1,184 +1,159 @@
-import { randomUUID } from "node:crypto";
 import type { HandlerContext, HandlerResult } from "@nexus/identity-and-access";
+import { randomUUID } from "node:crypto";
 
 type Args = {
-  organization_id?: string;
-  gap_report_id?: string;
+  organization_id?: unknown;
   findings?: unknown;
 };
 
 type RemediationFinding = {
-  finding_id: string;
-  title: string;
-  severity: "low" | "medium" | "high" | "critical";
-  suggested_owner: string | null;
-  fix_text: string;
+  finding_id?: string;
+  title?: string;
+  severity?: string;
+  suggested_owner?: string;
+  fix_text?: string;
 };
 
-function asNonEmptyString(value: unknown): string | null {
+const VALID_SEVERITIES = new Set(["low", "medium", "high", "critical"]);
+
+function asObject(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function normalizeString(value: unknown): string | null {
   if (typeof value !== "string") return null;
-  const trimmed: string = value.trim();
+  const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function normalizeSeverity(value: unknown): RemediationFinding["severity"] {
-  const raw: string = typeof value === "string" ? value.trim().toLowerCase() : "";
-  if (raw === "critical" || raw === "high" || raw === "medium" || raw === "low") {
-    return raw;
-  }
-  return "medium";
+function normalizeSeverity(value: unknown): string {
+  const candidate = normalizeString(value)?.toLowerCase() ?? "medium";
+  return VALID_SEVERITIES.has(candidate) ? candidate : "medium";
 }
 
-function parseFindings(value: unknown): RemediationFinding[] {
+function toFindings(value: unknown): RemediationFinding[] {
   if (!Array.isArray(value)) return [];
-
-  const findings: RemediationFinding[] = [];
+  const results: RemediationFinding[] = [];
   for (const item of value) {
-    if (item === null || typeof item !== "object") continue;
-    const obj: Record<string, unknown> = item as Record<string, unknown>;
-
-    const finding_id: string =
-      asNonEmptyString(obj.finding_id) ??
-      asNonEmptyString(obj.gap_id) ??
-      randomUUID();
-
-    const title: string | null = asNonEmptyString(obj.title) ?? asNonEmptyString(obj.gap_title);
-    const fix_text: string | null =
-      asNonEmptyString(obj.fix_text) ??
-      asNonEmptyString(obj.remediation) ??
-      asNonEmptyString(obj.recommended_fix);
-
-    if (!title || !fix_text) continue;
-
-    findings.push({
-      finding_id,
-      title,
-      severity: normalizeSeverity(obj.severity),
-      suggested_owner: asNonEmptyString(obj.suggested_owner),
-      fix_text,
+    const obj = asObject(item);
+    if (!obj) continue;
+    results.push({
+      finding_id: normalizeString(obj.finding_id),
+      title: normalizeString(obj.title),
+      severity: normalizeString(obj.severity) ?? undefined,
+      suggested_owner: normalizeString(obj.suggested_owner) ?? undefined,
+      fix_text: normalizeString(obj.fix_text) ?? undefined,
     });
   }
-
-  return findings;
+  return results;
 }
 
-function readOrgId(ctx: HandlerContext, args: Args): string | null {
-  const explicit: string | null = asNonEmptyString(args.organization_id);
-  if (explicit) return explicit;
+function orgIdFromContext(ctx: HandlerContext): string | null {
+  const maybeCtx = ctx as unknown as Record<string, unknown>;
+  const direct = normalizeString(maybeCtx.organization_id);
+  if (direct) return direct;
 
-  const fromCtx =
-    (ctx as unknown as { organizationId?: unknown }).organizationId ??
-    (ctx as unknown as { organization_id?: unknown }).organization_id;
-  return asNonEmptyString(fromCtx);
-}
-
-async function getDbClient(ctx: HandlerContext): Promise<{
-  query: (sql: string, params?: unknown[]) => Promise<{ rows?: unknown[] }>;
-}> {
-  const candidate =
-    (ctx as unknown as { db?: unknown }).db ??
-    (ctx as unknown as { pool?: unknown }).pool ??
-    (ctx as unknown as { pg?: unknown }).pg;
-  if (
-    candidate &&
-    typeof candidate === "object" &&
-    "query" in candidate &&
-    typeof (candidate as { query?: unknown }).query === "function"
-  ) {
-    return candidate as {
-      query: (sql: string, params?: unknown[]) => Promise<{ rows?: unknown[] }>;
-    };
+  const org = asObject(maybeCtx.organization);
+  if (org) {
+    const orgId = normalizeString(org.id);
+    if (orgId) return orgId;
   }
 
-  throw new Error("Database client not available in handler context");
+  const session = asObject(maybeCtx.session);
+  if (session) {
+    const sessionOrgId = normalizeString(session.organization_id);
+    if (sessionOrgId) return sessionOrgId;
+    const sessionOrg = asObject(session.organization);
+    if (sessionOrg) {
+      const nested = normalizeString(sessionOrg.id);
+      if (nested) return nested;
+    }
+  }
+
+  return null;
 }
 
 export async function handleCreateRemediationItems(
   ctx: HandlerContext,
   args: Args,
 ): Promise<HandlerResult> {
-  const organizationId: string | null = readOrgId(ctx, args);
-  const gapReportId: string | null = asNonEmptyString(args.gap_report_id);
-  const findings: RemediationFinding[] = parseFindings(args.findings);
+  const organizationId =
+    normalizeString(args.organization_id) ?? orgIdFromContext(ctx);
 
-  if (!organizationId || !gapReportId) {
+  if (!organizationId) {
     return {
       ok: false,
-      error: "invalid_args",
-      message: "organization_id and gap_report_id are required",
+      error: "missing_organization_id",
+      autonomy: "confirm",
     } as HandlerResult;
   }
+
+  const findings = toFindings(args.findings);
 
   if (findings.length === 0) {
     return {
       ok: true,
+      autonomy: "confirm",
       data: {
-        created: 0,
+        inserted: 0,
         skipped: 0,
       },
     } as HandlerResult;
   }
 
-  const db = await getDbClient(ctx);
-  let created = 0;
+  const db = (ctx as unknown as { db?: { query?: (sql: string, params?: unknown[]) => Promise<unknown> } }).db;
+  if (!db?.query) {
+    return {
+      ok: false,
+      error: "db_unavailable",
+      autonomy: "confirm",
+    } as HandlerResult;
+  }
+
+  let inserted = 0;
   let skipped = 0;
 
   for (const finding of findings) {
-    const existing = await db.query(
-      `
-      SELECT id
-      FROM soc2_remediation_items
-      WHERE organization_id = $1
-        AND gap_report_id = $2
-        AND finding_id = $3
-      LIMIT 1
-      `,
-      [organizationId, gapReportId, finding.finding_id],
-    );
+    const title = normalizeString(finding.title);
+    const fixText = normalizeString(finding.fix_text);
 
-    if (Array.isArray(existing.rows) && existing.rows.length > 0) {
+    if (!title || !fixText) {
       skipped += 1;
       continue;
     }
 
-    const remediationId: string = randomUUID();
+    const id = randomUUID();
+    const severity = normalizeSeverity(finding.severity);
+    const suggestedOwner = normalizeString(finding.suggested_owner);
+
     await db.query(
-      `
-      INSERT INTO soc2_remediation_items (
+      `INSERT INTO soc2_remediation_items
+         (id, organization_id, finding_id, title, severity, suggested_owner, fix_text, status, created_at, updated_at)
+       VALUES
+         ($1, $2, $3, $4, $5, $6, $7, 'open', NOW(), NOW())`,
+      [
         id,
-        organization_id,
-        gap_report_id,
-        finding_id,
+        organizationId,
+        normalizeString(finding.finding_id),
         title,
         severity,
-        suggested_owner,
-        fix_text,
-        status,
-        created_at,
-        updated_at
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'open', NOW(), NOW())
-      `,
-      [
-        remediationId,
-        organizationId,
-        gapReportId,
-        finding.finding_id,
-        finding.title,
-        finding.severity,
-        finding.suggested_owner,
-        finding.fix_text,
+        suggestedOwner,
+        fixText,
       ],
     );
-    created += 1;
+
+    inserted += 1;
   }
 
   return {
     ok: true,
+    autonomy: "confirm",
     data: {
-      created,
+      inserted,
       skipped,
-      autonomy: "confirm",
     },
   } as HandlerResult;
 }
