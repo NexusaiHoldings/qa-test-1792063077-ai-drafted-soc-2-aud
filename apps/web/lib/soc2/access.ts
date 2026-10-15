@@ -371,3 +371,60 @@ export async function getSoc2PlanTier(organizationId: string): Promise<Soc2PlanT
   if (plan.includes("free") || plan.includes("trial")) return "free";
   return "paid";
 }
+
+/**
+ * Number of findings a free-tier org may see in its gap report preview. The
+ * research-backed "product-led front door" shows free orgs the FULL control
+ * coverage meter plus the top 5 findings; the rest unlock on upgrade.
+ */
+export const FREE_TIER_FINDINGS_LIMIT = 5;
+
+/**
+ * The resolved SOC 2 entitlement set for an org, derived purely from its plan
+ * tier. This is the single predicate the /scan wizard and gap surfaces consult
+ * so gating lives in ONE place rather than being re-derived per page.
+ */
+export interface Soc2ScanAccess {
+  readonly tier: Soc2PlanTier;
+  readonly isFree: boolean;
+  /** Everyone — including free — sees the full control coverage meter. */
+  readonly canViewCoverageMeter: boolean;
+  /** Free tier is capped; paid unlocks every finding. */
+  readonly canViewAllFindings: boolean;
+  /** Max findings to render for this tier (Infinity when unlimited). */
+  readonly findingsLimit: number;
+  /** Remediation queue is a paid-only surface. */
+  readonly canAccessRemediationQueue: boolean;
+  /** Evidence-anchored policy drafting is a paid-only surface. */
+  readonly canAccessPolicyDrafting: boolean;
+}
+
+/** Pure predicate: entitlements for a given plan tier (no I/O). */
+export function scanAccessForTier(tier: Soc2PlanTier): Soc2ScanAccess {
+  const isFree = tier === "free";
+  return {
+    tier,
+    isFree,
+    canViewCoverageMeter: true,
+    canViewAllFindings: !isFree,
+    findingsLimit: isFree ? FREE_TIER_FINDINGS_LIMIT : Number.POSITIVE_INFINITY,
+    canAccessRemediationQueue: !isFree,
+    canAccessPolicyDrafting: !isFree,
+  };
+}
+
+/** How many of `totalFindings` are visible on this tier, and how many are hidden. */
+export function splitFindingsByTier(
+  tier: Soc2PlanTier,
+  totalFindings: number,
+): { visible: number; hidden: number } {
+  const limit = scanAccessForTier(tier).findingsLimit;
+  const visible = Number.isFinite(limit) ? Math.min(limit, Math.max(0, totalFindings)) : Math.max(0, totalFindings);
+  return { visible, hidden: Math.max(0, totalFindings - visible) };
+}
+
+/** Resolve an org's plan tier and return its full entitlement set. */
+export async function getScanAccess(organizationId: string): Promise<Soc2ScanAccess> {
+  const tier = await getSoc2PlanTier(organizationId);
+  return scanAccessForTier(tier);
+}

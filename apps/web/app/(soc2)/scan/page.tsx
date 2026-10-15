@@ -2,7 +2,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { upsertConnection } from "@/lib/soc2/access";
 import { resolveOrgContext } from "@/lib/soc2/access";
-import { getScanProgress, upsertScanSession } from "@/lib/soc2/scan";
+import {
+  getScanProgress,
+  upsertScanSession,
+  ensureConnectionRun,
+  trackScanEvent,
+} from "@/lib/soc2/scan";
 
 export default async function ScanPage(): Promise<JSX.Element> {
   const ctx = await resolveOrgContext();
@@ -47,6 +52,9 @@ export default async function ScanPage(): Promise<JSX.Element> {
       config: { role: "ReadOnly", external_id: "soc2-scan" },
     });
 
+    await ensureConnectionRun(localCtx.orgId, "aws");
+    await trackScanEvent("aws_connected", localCtx.user.id, localCtx.orgId);
+
     redirect("/scan");
   }
 
@@ -66,6 +74,9 @@ export default async function ScanPage(): Promise<JSX.Element> {
       createdBy: localCtx.user.id,
       config: { app: "soc2-readonly" },
     });
+
+    await ensureConnectionRun(localCtx.orgId, "github");
+    await trackScanEvent("github_connected", localCtx.user.id, localCtx.orgId);
 
     redirect("/scan/status");
   }

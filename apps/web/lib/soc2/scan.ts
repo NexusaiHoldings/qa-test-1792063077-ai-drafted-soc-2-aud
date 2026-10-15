@@ -1,11 +1,49 @@
-import { trackServerEvent } from "@nexus/analytics-and-telemetry";
+import { handleRecordEvent } from "@nexus/analytics-and-telemetry";
 import { buildDb } from "@/lib/db";
+import { buildEventBus } from "@/lib/events";
 import {
   getConnection,
+  splitFindingsByTier,
   type ConnectionStatus,
   type OrgContext,
   type Soc2PlanTier,
 } from "@/lib/soc2/access";
+
+/** Conversion / drop-off events emitted along the free gap-scan funnel. */
+export type ScanFunnelEvent =
+  | "scan_started"
+  | "aws_connected"
+  | "github_connected"
+  | "report_ready"
+  | "upgraded";
+
+/**
+ * Record a funnel event via @nexus/analytics-and-telemetry. Best-effort:
+ * instrumentation must never break the wizard, so failures are logged and
+ * swallowed. The organization id is folded into properties because the lego's
+ * analytics_events table is keyed by user + free-form properties.
+ */
+export async function trackScanEvent(
+  event: ScanFunnelEvent,
+  userId: string | null,
+  organizationId: string,
+  properties: Record<string, unknown> = {},
+): Promise<void> {
+  try {
+    await handleRecordEvent(
+      { db: buildDb(), events: buildEventBus() },
+      {
+        name: event,
+        user_id: userId ?? undefined,
+        properties: { organization_id: organizationId, ...properties },
+      },
+    );
+  } catch (err) {
+    console.error(
+      JSON.stringify({ level: "error", scope: "soc2.scan", msg: "track_event_failed", event, error: String(err) }),
+    );
+  }
+}
 
 export type ScanStep = "aws" | "github" | "running" | "ready";
 
@@ -128,14 +166,9 @@ export async function upsertScanSession(
     due.toISOString(),
   );
 
-  await trackServerEvent({
-    event: "scan_started",
-    userId: ctx.user.id,
-    organizationId: ctx.orgId,
-    properties: {
-      consultant_quote_usd: input.consultantQuoteUsd ?? null,
-      auditor_chosen: input.auditorChosen ?? null,
-    },
+  await trackScanEvent("scan_started", ctx.user.id, ctx.orgId, {
+    consultant_quote_usd: input.consultantQuoteUsd ?? null,
+    auditor_chosen: input.auditorChosen ?? null,
   });
 
   return normalizeSession(rows[0]);
@@ -221,8 +254,10 @@ export async function getScanProgress(ctx: OrgContext): Promise<ScanProgress> {
   const failedRuns = runs.filter((r) => r.status === "failed").length;
 
   const findingsCount = await getFindingsCount(ctx.orgId);
-  const topFindingsCount = planTier === "free" ? Math.min(5, findingsCount) : findingsCount;
-  const hiddenFindingsCount = Math.max(0, findingsCount - topFindingsCount);
+  const { visible: topFindingsCount, hidden: hiddenFindingsCount } = splitFindingsByTier(
+    planTier,
+    findingsCount,
+  );
 
   const reportReady = completedRuns >= 2 && totalRuns >= 2;
   let step: ScanStep = "aws";
@@ -239,11 +274,9 @@ export async function getScanProgress(ctx: OrgContext): Promise<ScanProgress> {
   const percent = reportReady ? 100 : Math.min(95, percentBase + runPercent);
 
   if (reportReady) {
-    await trackServerEvent({
-      event: "report_ready",
-      userId: ctx.user.id,
-      organizationId: ctx.orgId,
-      properties: { findings_count: findingsCount, plan_tier: planTier },
+    await trackScanEvent("report_ready", ctx.user.id, ctx.orgId, {
+      findings_count: findingsCount,
+      plan_tier: planTier,
     });
   }
 
