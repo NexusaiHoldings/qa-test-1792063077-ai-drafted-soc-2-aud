@@ -39,4 +39,3 @@ export const DOMAIN_DISPATCH: Record<
   persist_policy_draft: (ctx, a) => handlePersistPolicyDraft(ctx, a),
   record_auditor_acceptance: (ctx, a) => handleRecordAuditorAcceptance(ctx, a),
 };
-

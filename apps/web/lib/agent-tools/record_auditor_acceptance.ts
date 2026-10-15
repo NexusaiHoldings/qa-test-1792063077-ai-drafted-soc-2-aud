@@ -1,20 +1,23 @@
 import type { HandlerContext, HandlerResult } from "@nexus/identity-and-access";
-import { randomUUID } from "node:crypto";
-import { sql } from "@/lib/db";
+import { Pool } from "pg";
+import crypto from "node:crypto";
 
 type Args = {
-  organizationId?: unknown;
-  policyVersionId?: unknown;
-  policyVersionNumber?: unknown;
-  auditorFirm?: unknown;
+  organization_id?: unknown;
+  policy_version_id?: unknown;
+  firm?: unknown;
   outcome?: unknown;
-  revisionNotes?: unknown;
-  acceptedByUserId?: unknown;
+  revision_notes?: unknown;
+  accepted_at?: unknown;
 };
 
-type DbResultRow = Record<string, unknown>;
+type DbRow = {
+  acceptance_status: string | null;
+};
 
-const ALLOWED_OUTCOMES = new Set(["accepted", "rejected", "needs_revision"]);
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
 function asNonEmptyString(value: unknown): string | null {
   if (typeof value !== "string") {
@@ -24,25 +27,22 @@ function asNonEmptyString(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function asNullableString(value: unknown): string | null {
+function parseIsoDate(value: unknown): Date | null {
+  if (value == null) {
+    return new Date();
+  }
   if (typeof value !== "string") {
     return null;
   }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
+  const dt = new Date(value);
+  return Number.isNaN(dt.getTime()) ? null : dt;
 }
 
-function toErrorResult(
-  code: string,
-  message: string,
-  details?: Record<string, unknown>,
-): HandlerResult {
+function buildError(message: string): HandlerResult {
   return {
     ok: false,
-    code,
-    message,
-    ...(details ? { details } : {}),
-  };
+    error: message,
+  } as HandlerResult;
 }
 
 export async function handleRecordAuditorAcceptance(
@@ -50,115 +50,103 @@ export async function handleRecordAuditorAcceptance(
   args: Args,
 ): Promise<HandlerResult> {
   const organizationId =
-    asNonEmptyString(args.organizationId) ??
+    asNonEmptyString(args.organization_id) ??
     asNonEmptyString((ctx as { organizationId?: unknown }).organizationId);
-
-  const policyVersionId = asNonEmptyString(args.policyVersionId);
-  const policyVersionNumber = asNullableString(args.policyVersionNumber);
-  const auditorFirm = asNonEmptyString(args.auditorFirm);
-  const outcome = asNonEmptyString(args.outcome)?.toLowerCase() ?? null;
-  const revisionNotes = asNullableString(args.revisionNotes);
-
-  const acceptedByUserId =
-    asNonEmptyString(args.acceptedByUserId) ??
-    asNonEmptyString((ctx as { userId?: unknown }).userId);
+  const policyVersionId = asNonEmptyString(args.policy_version_id);
+  const firm = asNonEmptyString(args.firm);
+  const outcome = asNonEmptyString(args.outcome);
+  const revisionNotes =
+    typeof args.revision_notes === "string" ? args.revision_notes.trim() : "";
+  const acceptedAt = parseIsoDate(args.accepted_at);
 
   if (!organizationId) {
-    return toErrorResult("invalid_args", "organizationId is required");
+    return buildError("organization_id is required");
   }
-
   if (!policyVersionId) {
-    return toErrorResult("invalid_args", "policyVersionId is required");
+    return buildError("policy_version_id is required");
+  }
+  if (!firm) {
+    return buildError("firm is required");
+  }
+  if (!outcome) {
+    return buildError("outcome is required");
+  }
+  if (!acceptedAt) {
+    return buildError("accepted_at must be a valid ISO datetime when provided");
   }
 
-  if (!auditorFirm) {
-    return toErrorResult("invalid_args", "auditorFirm is required");
-  }
-
-  if (!outcome || !ALLOWED_OUTCOMES.has(outcome)) {
-    return toErrorResult(
-      "invalid_args",
-      "outcome must be one of: accepted, rejected, needs_revision",
-    );
-  }
-
-  if (!acceptedByUserId) {
-    return toErrorResult(
-      "invalid_args",
-      "acceptedByUserId is required (or must be present in ctx.userId)",
-    );
-  }
-
+  const client = await pool.connect();
   try {
-    const policyVersionRows = (await sql<DbResultRow[]>`
-      SELECT id, organization_id
-      FROM soc2_policy_versions
-      WHERE id = ${policyVersionId}
-        AND organization_id = ${organizationId}
-      LIMIT 1
-    `) as DbResultRow[];
+    await client.query("BEGIN");
 
-    if (!Array.isArray(policyVersionRows) || policyVersionRows.length === 0) {
-      return toErrorResult(
-        "not_found",
-        "Policy version not found for organization",
-        { policyVersionId, organizationId },
-      );
+    const versionLookup = await client.query<DbRow>(
+      `
+        SELECT acceptance_status
+        FROM soc2_policy_versions
+        WHERE id = $1 AND organization_id = $2
+        LIMIT 1
+      `,
+      [policyVersionId, organizationId],
+    );
+
+    if (versionLookup.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return buildError("policy_version not found for organization");
     }
 
-    const acceptanceRecordId = randomUUID();
+    const acceptanceId = crypto.randomUUID();
 
-    await sql`
-      INSERT INTO soc2_auditor_acceptance_records (
-        id,
-        organization_id,
-        policy_version_id,
-        policy_version_number,
-        auditor_firm,
+    await client.query(
+      `
+        INSERT INTO soc2_auditor_acceptance_records (
+          id,
+          organization_id,
+          policy_version_id,
+          firm,
+          outcome,
+          revision_notes,
+          accepted_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `,
+      [
+        acceptanceId,
+        organizationId,
+        policyVersionId,
+        firm,
         outcome,
-        revision_notes,
-        accepted_by_user_id
-      ) VALUES (
-        ${acceptanceRecordId},
-        ${organizationId},
-        ${policyVersionId},
-        ${policyVersionNumber},
-        ${auditorFirm},
-        ${outcome},
-        ${revisionNotes},
-        ${acceptedByUserId}
-      )
-    `;
+        revisionNotes,
+        acceptedAt.toISOString(),
+      ],
+    );
 
-    const acceptanceStatus = outcome === "accepted" ? "accepted" : "needs_revision";
+    await client.query(
+      `
+        UPDATE soc2_policy_versions
+        SET
+          acceptance_status = $1,
+          updated_at = NOW()
+        WHERE id = $2 AND organization_id = $3
+      `,
+      [outcome, policyVersionId, organizationId],
+    );
 
-    await sql`
-      UPDATE soc2_policy_versions
-      SET
-        auditor_acceptance_status = ${acceptanceStatus},
-        auditor_acceptance_outcome = ${outcome},
-        auditor_acceptance_notes = ${revisionNotes},
-        auditor_firm = ${auditorFirm},
-        auditor_accepted_by_user_id = ${acceptedByUserId},
-        auditor_accepted_at = NOW(),
-        updated_at = NOW()
-      WHERE id = ${policyVersionId}
-        AND organization_id = ${organizationId}
-    `;
+    await client.query("COMMIT");
 
     return {
       ok: true,
       data: {
-        acceptanceRecordId,
-        policyVersionId,
-        organizationId,
-        outcome,
-        acceptanceStatus,
+        acceptance_record_id: acceptanceId,
+        organization_id: organizationId,
+        policy_version_id: policyVersionId,
+        acceptance_status: outcome,
       },
-    };
-  } catch (error) {
-    return toErrorResult("internal_error", "Failed to record auditor acceptance", {
-      error: error instanceof Error ? error.message : "unknown_error",
-    });
+    } as HandlerResult;
+  } catch (error: unknown) {
+    await client.query("ROLLBACK");
+    const message =
+      error instanceof Error ? error.message : "unknown database error";
+    return buildError(`failed_to_record_auditor_acceptance: ${message}`);
+  } finally {
+    client.release();
   }
 }
