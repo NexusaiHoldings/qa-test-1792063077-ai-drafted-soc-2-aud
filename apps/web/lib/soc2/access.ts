@@ -71,9 +71,16 @@ export interface Soc2Connection {
   updated_at: string;
 }
 
+export type Soc2PlanTier = "free" | "paid";
+
 interface OrgRow {
   id: string;
   name: string;
+}
+
+interface BillingPlanRow {
+  plan_key: string | null;
+  status: string | null;
 }
 
 /**
@@ -344,4 +351,40 @@ export function formatRelativeTime(iso: string | null): string {
   if (hours < 24) return `${hours} hr ago`;
   const days = Math.floor(hours / 24);
   return `${days} day${days === 1 ? "" : "s"} ago`;
+}
+
+/**
+ * Plan-based access predicate for free-tier gating.
+ * Reads org billing rows best-effort and defaults to "free" when unknown.
+ */
+export async function getSoc2PlanTier(organizationId: string): Promise<Soc2PlanTier> {
+  const db = buildDb();
+  try {
+    const rows = await db.query<BillingPlanRow>(
+      `SELECT plan_key, status
+         FROM billing_subscriptions
+        WHERE organization_id = $1::uuid
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      organizationId,
+    );
+    const row = rows[0];
+    if (!row) return "free";
+    const status = String(row.status ?? "").toLowerCase();
+    const key = String(row.plan_key ?? "").toLowerCase();
+    const active = status === "active" || status === "trialing";
+    if (!active) return "free";
+    if (key.includes("free")) return "free";
+    return "paid";
+  } catch (err) {
+    console.error(
+      JSON.stringify({ level: "error", scope: "soc2.access", msg: "billing_plan_lookup_failed", error: String(err) }),
+    );
+    return "free";
+  }
+}
+
+export async function canAccessFullSoc2(organizationId: string): Promise<boolean> {
+  const tier = await getSoc2PlanTier(organizationId);
+  return tier === "paid";
 }
