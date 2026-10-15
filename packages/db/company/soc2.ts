@@ -77,3 +77,79 @@ CREATE TABLE IF NOT EXISTS soc2_connection_events (
 CREATE INDEX IF NOT EXISTS idx_soc2_connection_events_org
   ON soc2_connection_events (organization_id, created_at DESC);
 `;
+
+/**
+ * SOC 2 Trust Services Criteria control library + evidence mapping (F1-005).
+ *
+ * `soc2_controls` is the embedded AICPA SOC 2 (2017, 2022 points of focus)
+ * knowledge base — Common Criteria CC1.1–CC9.2 plus Availability A1 and
+ * Confidentiality C1. It is GLOBAL reference data (not organization-scoped):
+ * the criteria are identical for every tenant. apps/web/lib/soc2/tsc/seed.ts
+ * upserts the catalog here (ON CONFLICT (code)) at deploy/first-run.
+ *
+ * `soc2_evidence_artifacts` holds the ingested, read-only infrastructure state
+ * (CloudTrail config, IAM password policy, GitHub branch protection, …) — one
+ * row per collected artifact, organization_id-scoped.
+ *
+ * `soc2_control_evidence` is the OUTPUT of apps/web/lib/soc2/mapper.ts: the
+ * deterministic-rule-first / LLM-fallback mapping of artifacts to criteria.
+ * Status is always one of evidence_found | gap | needs_human_review |
+ * not_applicable_claimed — NEVER 'compliant' (the agent flags, it does not
+ * certify). A row with status 'evidence_found' ALWAYS carries a non-null
+ * artifact_id: no artifact citation, no evidence_found (hallucination guard).
+ *
+ * No CHECK constraints on free-form text columns (per task constraints);
+ * status/method vocabularies are enforced in application code.
+ */
+export const SOC2_CONTROLS_DDL = `
+CREATE TABLE IF NOT EXISTS soc2_controls (
+  id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  code               text NOT NULL UNIQUE,
+  category           text NOT NULL,
+  category_label     text NOT NULL,
+  title              text NOT NULL,
+  criteria_text      text NOT NULL,
+  points_of_focus    jsonb NOT NULL DEFAULT '[]'::jsonb,
+  policy_document    text NOT NULL,
+  artifact_types     jsonb NOT NULL DEFAULT '[]'::jsonb,
+  sort_order         integer NOT NULL DEFAULT 0,
+  created_at         timestamptz NOT NULL DEFAULT now(),
+  updated_at         timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_soc2_controls_category
+  ON soc2_controls (category, sort_order);
+
+CREATE TABLE IF NOT EXISTS soc2_evidence_artifacts (
+  id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id    uuid NOT NULL,
+  provider           text NOT NULL,
+  artifact_type      text NOT NULL,
+  external_id        text,
+  source_ref         text,
+  data               jsonb NOT NULL DEFAULT '{}'::jsonb,
+  collected_at       timestamptz NOT NULL DEFAULT now(),
+  created_at         timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_soc2_evidence_artifacts_org
+  ON soc2_evidence_artifacts (organization_id, artifact_type);
+
+CREATE TABLE IF NOT EXISTS soc2_control_evidence (
+  id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id    uuid NOT NULL,
+  control_code       text NOT NULL,
+  status             text NOT NULL,
+  artifact_id        uuid,
+  method             text NOT NULL,
+  rule_id            text,
+  model              text,
+  confidence         numeric,
+  rationale          text NOT NULL,
+  created_at         timestamptz NOT NULL DEFAULT now(),
+  updated_at         timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_soc2_control_evidence_org
+  ON soc2_control_evidence (organization_id, control_code);
+CREATE INDEX IF NOT EXISTS idx_soc2_control_evidence_artifact
+  ON soc2_control_evidence (artifact_id)
+  WHERE artifact_id IS NOT NULL;
+`;
