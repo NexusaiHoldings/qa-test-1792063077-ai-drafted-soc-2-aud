@@ -1,3 +1,20 @@
+/**
+ * Company-local agent tool: `create_remediation_items`.
+ *
+ * Confirm-gated mutation. After a SOC 2 gap report is generated, the agent
+ * proposes remediation items for the new gap findings (severity, suggested
+ * owner, fix text). Because autonomy is `confirm`, the substrate routes this
+ * handler through the cross-boundary approval bridge before it runs — by the
+ * time this executes the human has already approved the write.
+ *
+ * Signature matches the lego handler shape the DOMAIN_DISPATCH map expects:
+ *   (ctx: HandlerContext, args: Args) => Promise<HandlerResult>
+ *
+ * Every row is organization_id-scoped (per @nexus/organizations-and-teams) and
+ * written to soc2_remediation_items via parameterized SQL — no interpolation,
+ * UUID primary keys only.
+ */
+
 import type { HandlerContext, HandlerResult } from "@nexus/identity-and-access";
 import { randomUUID } from "node:crypto";
 
@@ -7,11 +24,11 @@ type Args = {
 };
 
 type RemediationFinding = {
-  finding_id?: string;
-  title?: string;
-  severity?: string;
-  suggested_owner?: string;
-  fix_text?: string;
+  finding_id: string | null;
+  title: string | null;
+  severity: string | null;
+  suggested_owner: string | null;
+  fix_text: string | null;
 };
 
 const VALID_SEVERITIES = new Set(["low", "medium", "high", "critical"]);
@@ -43,9 +60,9 @@ function toFindings(value: unknown): RemediationFinding[] {
     results.push({
       finding_id: normalizeString(obj.finding_id),
       title: normalizeString(obj.title),
-      severity: normalizeString(obj.severity) ?? undefined,
-      suggested_owner: normalizeString(obj.suggested_owner) ?? undefined,
-      fix_text: normalizeString(obj.fix_text) ?? undefined,
+      severity: normalizeString(obj.severity),
+      suggested_owner: normalizeString(obj.suggested_owner),
+      fix_text: normalizeString(obj.fix_text),
     });
   }
   return results;
@@ -85,41 +102,28 @@ export async function handleCreateRemediationItems(
 
   if (!organizationId) {
     return {
-      ok: false,
-      error: "missing_organization_id",
-      autonomy: "confirm",
-    } as HandlerResult;
+      status: 400,
+      body: "organization_id is required",
+    };
   }
 
   const findings = toFindings(args.findings);
 
   if (findings.length === 0) {
     return {
-      ok: true,
-      autonomy: "confirm",
-      data: {
-        inserted: 0,
-        skipped: 0,
-      },
-    } as HandlerResult;
+      status: 200,
+      body: { autonomy: "confirm", inserted: 0, skipped: 0, item_ids: [] },
+    };
   }
 
-  const db = (ctx as unknown as { db?: { query?: (sql: string, params?: unknown[]) => Promise<unknown> } }).db;
-  if (!db?.query) {
-    return {
-      ok: false,
-      error: "db_unavailable",
-      autonomy: "confirm",
-    } as HandlerResult;
-  }
-
-  let inserted = 0;
+  const itemIds: string[] = [];
   let skipped = 0;
 
   for (const finding of findings) {
-    const title = normalizeString(finding.title);
-    const fixText = normalizeString(finding.fix_text);
+    const title = finding.title;
+    const fixText = finding.fix_text;
 
+    // A remediation item is meaningless without something to fix and how.
     if (!title || !fixText) {
       skipped += 1;
       continue;
@@ -127,33 +131,42 @@ export async function handleCreateRemediationItems(
 
     const id = randomUUID();
     const severity = normalizeSeverity(finding.severity);
-    const suggestedOwner = normalizeString(finding.suggested_owner);
 
-    await db.query(
-      `INSERT INTO soc2_remediation_items
-         (id, organization_id, finding_id, title, severity, suggested_owner, fix_text, status, created_at, updated_at)
-       VALUES
-         ($1, $2, $3, $4, $5, $6, $7, 'open', NOW(), NOW())`,
-      [
+    try {
+      await ctx.db.execute(
+        `INSERT INTO soc2_remediation_items
+           (id, organization_id, finding_id, title, severity,
+            suggested_owner, fix_text, status, created_at, updated_at)
+         VALUES
+           ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, 'open', NOW(), NOW())`,
         id,
         organizationId,
-        normalizeString(finding.finding_id),
+        finding.finding_id,
         title,
         severity,
-        suggestedOwner,
+        finding.suggested_owner,
         fixText,
-      ],
-    );
+      );
+    } catch {
+      return { status: 500, body: "failed to persist remediation items" };
+    }
 
-    inserted += 1;
+    itemIds.push(id);
   }
 
+  await ctx.events.publish("soc2.remediation_items_created", {
+    organization_id: organizationId,
+    inserted: itemIds.length,
+    skipped,
+  });
+
   return {
-    ok: true,
-    autonomy: "confirm",
-    data: {
-      inserted,
+    status: 200,
+    body: {
+      autonomy: "confirm",
+      inserted: itemIds.length,
       skipped,
+      item_ids: itemIds,
     },
-  } as HandlerResult;
+  };
 }
