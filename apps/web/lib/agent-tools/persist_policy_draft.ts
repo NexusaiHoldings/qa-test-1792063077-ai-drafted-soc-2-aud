@@ -1,181 +1,191 @@
-import crypto from "node:crypto";
 import type { HandlerContext, HandlerResult } from "@nexus/identity-and-access";
 
-type JsonRecord = Record<string, unknown>;
-
-type ClauseAnchorInput = {
-  criterionCode: string;
-  evidenceArtifactId?: string | null;
-  evidenceExcerpt?: string | null;
-  rationale?: string | null;
-  confidence?: number | null;
-};
+type JsonPrimitive = string | number | boolean | null;
+type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 
 type Args = {
-  organization_id?: string;
-  policy_document_id?: string;
-  title?: string | null;
-  body_markdown?: string;
-  model_name?: string | null;
-  model_version?: string | null;
-  draft_summary?: string | null;
-  change_notes?: string | null;
-  clause_anchors?: ClauseAnchorInput[] | null;
-  approval_token?: string;
-  actor_user_id?: string | null;
-  metadata?: JsonRecord | null;
+  organizationId?: string;
+  policyDocumentId?: string;
+  title?: string;
+  bodyMarkdown?: string;
+  summary?: string;
+  model?: string;
+  sourceRunId?: string;
+  draftMetadata?: Record<string, JsonValue>;
+  clauseAnchors?: Array<{
+    clauseKey?: string;
+    criterionCode?: string;
+    evidenceArtifactId?: string;
+    evidenceSnippet?: string;
+    rationale?: string;
+    confidence?: number;
+    metadata?: Record<string, JsonValue>;
+  }>;
 };
 
-type QueryableClient = {
-  query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }>;
+type DbExecResult = {
+  rows?: Array<Record<string, unknown>>;
+  rowCount?: number;
 };
 
-function asClient(ctx: HandlerContext): QueryableClient {
-  const maybeDb = (ctx as unknown as { db?: QueryableClient }).db;
-  if (!maybeDb || typeof maybeDb.query !== "function") {
-    throw new Error("handler_context_missing_db_query");
+type DbLike = {
+  query: (sql: string, params?: unknown[]) => Promise<DbExecResult>;
+};
+
+function asObject(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function toDb(ctx: HandlerContext): DbLike | null {
+  const maybeDb = asObject(ctx).db;
+  if (maybeDb && typeof (maybeDb as DbLike).query === "function") {
+    return maybeDb as DbLike;
   }
-  return maybeDb;
+  return null;
 }
 
-function asString(value: unknown): string | null {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
-}
-
-function asNumber(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function normalizeAnchors(value: unknown): ClauseAnchorInput[] {
-  if (!Array.isArray(value)) return [];
-  const out: ClauseAnchorInput[] = [];
-  for (const item of value) {
-    if (!item || typeof item !== "object") continue;
-    const obj = item as Record<string, unknown>;
-    const criterionCode = asString(obj.criterionCode);
-    if (!criterionCode) continue;
-    out.push({
-      criterionCode,
-      evidenceArtifactId: asString(obj.evidenceArtifactId),
-      evidenceExcerpt: asString(obj.evidenceExcerpt),
-      rationale: asString(obj.rationale),
-      confidence: asNumber(obj.confidence),
-    });
+function pickOrganizationId(ctx: HandlerContext, args: Args): string | null {
+  if (typeof args.organizationId === "string" && args.organizationId.trim().length > 0) {
+    return args.organizationId.trim();
   }
-  return out;
+  const c = asObject(ctx);
+  const direct =
+    c.organizationId ??
+    c.orgId ??
+    asObject(c.session).organizationId ??
+    asObject(c.session).orgId ??
+    asObject(asObject(c.session).user).organizationId ??
+    asObject(asObject(c.session).user).orgId;
+
+  return typeof direct === "string" && direct.trim().length > 0 ? direct.trim() : null;
 }
 
-function ensureConfirmGate(args: Args): void {
-  const token = asString(args.approval_token);
-  if (!token) {
-    throw new Error("confirm_required_missing_approval_token");
-  }
+function badRequest(message: string): HandlerResult {
+  return {
+    ok: false,
+    error: { code: "bad_request", message },
+  } as HandlerResult;
+}
+
+function serverError(message: string): HandlerResult {
+  return {
+    ok: false,
+    error: { code: "internal_error", message },
+  } as HandlerResult;
 }
 
 export async function handlePersistPolicyDraft(
   ctx: HandlerContext,
   args: Args,
 ): Promise<HandlerResult> {
+  const db = toDb(ctx);
+  if (!db) {
+    return serverError("Database client unavailable on handler context.");
+  }
+
+  const organizationId = pickOrganizationId(ctx, args);
+  if (!organizationId) {
+    return badRequest("organizationId is required.");
+  }
+
+  const policyDocumentId =
+    typeof args.policyDocumentId === "string" ? args.policyDocumentId.trim() : "";
+  if (!policyDocumentId) {
+    return badRequest("policyDocumentId is required.");
+  }
+
+  const title = typeof args.title === "string" ? args.title.trim() : "";
+  const bodyMarkdown = typeof args.bodyMarkdown === "string" ? args.bodyMarkdown : "";
+  if (!title || !bodyMarkdown) {
+    return badRequest("title and bodyMarkdown are required.");
+  }
+
+  const summary = typeof args.summary === "string" ? args.summary : null;
+  const model = typeof args.model === "string" ? args.model : null;
+  const sourceRunId = typeof args.sourceRunId === "string" ? args.sourceRunId : null;
+  const draftMetadata = args.draftMetadata ?? {};
+  const clauseAnchors = Array.isArray(args.clauseAnchors) ? args.clauseAnchors : [];
+
+  await db.query("BEGIN");
   try {
-    ensureConfirmGate(args);
-
-    const organizationId = asString(args.organization_id);
-    const policyDocumentId = asString(args.policy_document_id);
-    const bodyMarkdown = asString(args.body_markdown);
-
-    if (!organizationId) throw new Error("organization_id_required");
-    if (!policyDocumentId) throw new Error("policy_document_id_required");
-    if (!bodyMarkdown) throw new Error("body_markdown_required");
-
-    const title = asString(args.title);
-    const modelName = asString(args.model_name);
-    const modelVersion = asString(args.model_version);
-    const draftSummary = asString(args.draft_summary);
-    const changeNotes = asString(args.change_notes);
-    const actorUserId = asString(args.actor_user_id);
-    const metadata = args.metadata && typeof args.metadata === "object" ? args.metadata : {};
-    const anchors = normalizeAnchors(args.clause_anchors);
-
-    const db = asClient(ctx);
-
-    await db.query("BEGIN");
-
-    const documentCheck = await db.query(
-      `
-      SELECT id
-      FROM soc2_policy_documents
-      WHERE id = $1 AND organization_id = $2
-      LIMIT 1
-      `,
-      [policyDocumentId, organizationId],
-    );
-
-    if (documentCheck.rows.length === 0) {
-      throw new Error("policy_document_not_found");
-    }
-
-    const policyVersionId = crypto.randomUUID();
-
-    await db.query(
+    const insertedVersion = await db.query(
       `
       INSERT INTO soc2_policy_versions (
-        id,
         organization_id,
         policy_document_id,
         title,
         body_markdown,
-        draft_summary,
-        change_notes,
-        model_name,
-        model_version,
-        created_by_user_id,
-        created_at,
-        metadata
-      ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), $11::jsonb
+        summary,
+        model,
+        source_run_id,
+        metadata,
+        created_at
       )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, NOW())
+      RETURNING id
       `,
       [
-        policyVersionId,
         organizationId,
         policyDocumentId,
         title,
         bodyMarkdown,
-        draftSummary,
-        changeNotes,
-        modelName,
-        modelVersion,
-        actorUserId,
-        JSON.stringify(metadata),
+        summary,
+        model,
+        sourceRunId,
+        JSON.stringify(draftMetadata),
       ],
     );
 
-    for (const anchor of anchors) {
+    const versionId = insertedVersion.rows?.[0]?.id;
+    if (typeof versionId !== "string" || versionId.length === 0) {
+      throw new Error("Failed to create policy version.");
+    }
+
+    for (const anchor of clauseAnchors) {
+      if (!anchor || typeof anchor !== "object") continue;
+
+      const clauseKey = typeof anchor.clauseKey === "string" ? anchor.clauseKey : null;
+      const criterionCode =
+        typeof anchor.criterionCode === "string" ? anchor.criterionCode : null;
+      const evidenceArtifactId =
+        typeof anchor.evidenceArtifactId === "string" ? anchor.evidenceArtifactId : null;
+      const evidenceSnippet =
+        typeof anchor.evidenceSnippet === "string" ? anchor.evidenceSnippet : null;
+      const rationale = typeof anchor.rationale === "string" ? anchor.rationale : null;
+      const confidence =
+        typeof anchor.confidence === "number" && Number.isFinite(anchor.confidence)
+          ? anchor.confidence
+          : null;
+      const metadata = anchor.metadata ?? {};
+
       await db.query(
         `
         INSERT INTO soc2_policy_clause_anchors (
-          id,
           organization_id,
+          policy_document_id,
           policy_version_id,
+          clause_key,
           criterion_code,
           evidence_artifact_id,
-          evidence_excerpt,
+          evidence_snippet,
           rationale,
           confidence,
+          metadata,
           created_at
-        ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, NOW()
         )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, NOW())
         `,
         [
-          crypto.randomUUID(),
           organizationId,
-          policyVersionId,
-          anchor.criterionCode,
-          anchor.evidenceArtifactId ?? null,
-          anchor.evidenceExcerpt ?? null,
-          anchor.rationale ?? null,
-          anchor.confidence ?? null,
+          policyDocumentId,
+          versionId,
+          clauseKey,
+          criterionCode,
+          evidenceArtifactId,
+          evidenceSnippet,
+          rationale,
+          confidence,
+          JSON.stringify(metadata),
         ],
       );
     }
@@ -183,42 +193,34 @@ export async function handlePersistPolicyDraft(
     await db.query(
       `
       UPDATE soc2_policy_documents
-      SET status = 'in_review',
-          current_draft_version_id = $1,
-          updated_at = NOW()
-      WHERE id = $2 AND organization_id = $3
+      SET
+        status = 'in_review',
+        current_version_id = $3,
+        updated_at = NOW()
+      WHERE organization_id = $1
+        AND id = $2
       `,
-      [policyVersionId, policyDocumentId, organizationId],
+      [organizationId, policyDocumentId, versionId],
     );
 
     await db.query("COMMIT");
 
     return {
       ok: true,
-      tool: "persist_policy_draft",
       data: {
-        organization_id: organizationId,
-        policy_document_id: policyDocumentId,
-        policy_version_id: policyVersionId,
-        anchor_count: anchors.length,
-        document_status: "in_review",
+        policyDocumentId,
+        policyVersionId: versionId,
+        status: "in_review",
+        anchorsPersisted: clauseAnchors.length,
       },
     } as HandlerResult;
-  } catch (error) {
-    try {
-      const db = asClient(ctx);
-      await db.query("ROLLBACK");
-    } catch {
-      // no-op rollback fallback
-    }
-
-    const message = error instanceof Error ? error.message : "persist_policy_draft_failed";
+  } catch (error: unknown) {
+    await db.query("ROLLBACK");
     return {
       ok: false,
-      tool: "persist_policy_draft",
       error: {
-        code: "persist_policy_draft_failed",
-        message,
+        code: "internal_error",
+        message: error instanceof Error ? error.message : "Failed to persist policy draft.",
       },
     } as HandlerResult;
   }

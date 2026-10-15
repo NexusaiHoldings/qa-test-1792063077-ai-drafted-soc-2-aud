@@ -37,4 +37,3 @@ export const DOMAIN_DISPATCH: Record<
   create_remediation_items: (ctx, a) => handleCreateRemediationItems(ctx, a),
   persist_policy_draft: (ctx, a) => handlePersistPolicyDraft(ctx, a),
 };
-
