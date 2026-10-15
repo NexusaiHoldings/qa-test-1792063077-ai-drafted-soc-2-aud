@@ -1,65 +1,92 @@
 /**
- * Top Navigation Configuration — substrate-topnav-001 (2026-05-24).
+ * Navigation configuration consumed by the substrate's <TopNav /> to render
+ * the sticky nav strip.
  *
- * Substrate ships with one nav entry (Home). Each portfolio company's
- * coding pipeline extends this file via F1-001 (per CTO mvp_scope —
- * cto-prompt-nav-requirement-001) to add links to the company's
- * specific feature pages.
+ * Canonical exports (do not rename): NavLink, NavGroup, NavConfig, NAV_CONFIG.
+ * NAV_CONFIG stays an object literal with `primary` + `groups` keys.
  *
- * The substrate's TopNav component reads PRIMARY_NAV_LINKS and renders
- * them in the order declared.
- *
- * Convention:
- *   - Always keep Home as the first entry.
- *   - Group related pages with NavGroup (admin, account, etc.).
- *   - Use relative paths (Next.js route group parens collapse out of
- *     the URL — e.g. apps/web/app/(domain)/configure/page.tsx serves
- *     at /configure).
- *   - Server-only data; no client JS bundled from this file.
+ * Links marked `adminOnly` are operator-surface entries; they are part of the
+ * config so the admin shell can render them, but public/customer nav
+ * rendering must filter them out (see `navForViewer`).
  */
 
-export type NavLink = {
-  /** URL path (without route-group parens). */
+export interface NavLink {
+  /** Absolute in-app path. */
   href: string;
-  /** Visible label. */
+  /** Human-readable label rendered in the nav strip. */
   label: string;
-  /** Operator/admin route — TopNav shows it only to admins. */
+  /**
+   * When true, the link is operator-only and must never render in the
+   * public/customer nav.
+   */
   adminOnly?: boolean;
-};
+}
 
-export type NavGroup = {
-  /** Group label (e.g. "Account", "Admin"). */
+export interface NavGroup {
+  /** Group heading rendered for the dropdown/section. */
   label: string;
-  /** Child links shown inline (flat) inside the group. */
+  /** Links inside the group. */
   links: NavLink[];
-};
+  /** When true, the entire group is operator-only. */
+  adminOnly?: boolean;
+}
 
-export type NavConfig = {
+export interface NavConfig {
+  /** Top-level links rendered directly in the nav strip. */
   primary: NavLink[];
+  /** Grouped links rendered as dropdowns/sections. */
   groups: NavGroup[];
+}
+
+export const NAV_CONFIG: NavConfig = {
+  primary: [
+    { href: '/scan', label: 'Free Gap Scan' },
+    { href: '/gaps', label: 'Gap Report' },
+    { href: '/policies', label: 'Policies' },
+  ],
+  groups: [
+    {
+      label: 'Workspace',
+      links: [
+        { href: '/connections', label: 'Connections' },
+        { href: '/evidence', label: 'Evidence' },
+        { href: '/controls', label: 'Controls' },
+        { href: '/handoff', label: 'Auditor Handoff' },
+      ],
+    },
+    {
+      label: 'Admin',
+      adminOnly: true,
+      links: [
+        { href: '/admin/controls', label: 'Control Library', adminOnly: true },
+        { href: '/admin/acceptance', label: 'Auditor Acceptance', adminOnly: true },
+        { href: '/admin/collectors', label: 'Collector Health', adminOnly: true },
+      ],
+    },
+  ],
 };
 
 /**
- * Default substrate configuration: just Home. Agents extending this
- * file should preserve Home as the first entry and append the
- * company-specific paths AFTER it.
- *
- * Example extension by F1-001:
- *   primary: [
- *     { href: "/", label: "Home" },
- *     { href: "/configure", label: "Configure" },
- *     { href: "/shop", label: "Shop" },
- *   ],
- *   groups: [
- *     { label: "Account", links: [
- *       { href: "/account/tier", label: "Tier" },
- *       { href: "/account/reorders", label: "Reorders" },
- *     ]},
- *   ],
+ * Returns the subset of NAV_CONFIG a viewer is allowed to see. Non-operator
+ * viewers never receive admin-only links or groups, so the operator surface
+ * cannot leak into the public nav.
  */
-export const NAV_CONFIG: NavConfig = {
-  primary: [
-    { href: "/", label: "Home" },
-  ],
-  groups: [],
-};
+export function navForViewer(viewer: { isOperator: boolean }): NavConfig {
+  const includeAdmin = viewer.isOperator === true;
+
+  const primary = NAV_CONFIG.primary.filter(
+    (link: NavLink) => includeAdmin || link.adminOnly !== true,
+  );
+
+  const groups = NAV_CONFIG.groups
+    .filter((group: NavGroup) => includeAdmin || group.adminOnly !== true)
+    .map((group: NavGroup): NavGroup => ({
+      ...group,
+      links: group.links.filter(
+        (link: NavLink) => includeAdmin || link.adminOnly !== true,
+      ),
+    }))
+    .filter((group: NavGroup) => group.links.length > 0);
+
+  return { primary, groups };
+}
