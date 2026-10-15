@@ -24,6 +24,7 @@
     "@nexus/legal-and-compliance": "*",
     "@nexus/notifications": "*",
     "@nexus/billing-and-subscriptions": "*",
+    "@nexus/analytics-and-telemetry": "*",
     "@nexus/admin-console": "*",
     "@nexus/support-and-help": "*",
     "@nexus/crm-and-lifecycle": "*",

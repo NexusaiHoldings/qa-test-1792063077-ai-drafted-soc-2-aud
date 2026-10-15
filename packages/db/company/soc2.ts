@@ -383,3 +383,59 @@ CREATE INDEX IF NOT EXISTS idx_soc2_policy_review_assignments_version
 CREATE INDEX IF NOT EXISTS idx_soc2_policy_review_assignments_org
   ON soc2_policy_review_assignments (organization_id, policy_id, created_at DESC);
 `;
+
+/**
+ * Free Gap Scan Entry Flow (F1-003).
+ *
+ * The product-led front door at /scan: a three-step wizard (connect AWS →
+ * connect GitHub → "your first gap report is being prepared") whose live
+ * progress ring is driven off soc2_connection_sync_runs and whose 24-hour
+ * commitment timestamp lives on soc2_scan_sessions.
+ *
+ *   - soc2_scan_sessions        — one row per (org): the self-serve activation
+ *                                 record. Carries the 24h report commitment and
+ *                                 the two optional buyer-intel fields the COO
+ *                                 research says are unknown — the consultant
+ *                                 quote the buyer received and whether an auditor
+ *                                 is already chosen — captured for CEO/CFO
+ *                                 learning. UNIQUE (organization_id) backs the
+ *                                 idempotent upsert in apps/web/lib/soc2/scan.ts.
+ *   - soc2_connection_sync_runs — one row per connector sync attempt. The
+ *                                 status wizard's progress ring counts
+ *                                 succeeded / failed / total runs off this table
+ *                                 to decide when the gap report is ready.
+ *
+ * Every row is organization_id-scoped. No CHECK constraints on free-form text
+ * columns (per task constraints); the provider / status vocabularies are
+ * enforced in application code (apps/web/lib/soc2/scan.ts).
+ */
+export const SOC2_SCAN_DDL = `
+CREATE TABLE IF NOT EXISTS soc2_scan_sessions (
+  id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id       uuid NOT NULL,
+  created_by            uuid,
+  consultant_quote_usd  numeric,
+  auditor_chosen        boolean,
+  commitment_due_at     timestamptz NOT NULL DEFAULT now() + interval '24 hours',
+  created_at            timestamptz NOT NULL DEFAULT now(),
+  updated_at            timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (organization_id)
+);
+CREATE INDEX IF NOT EXISTS idx_soc2_scan_sessions_org
+  ON soc2_scan_sessions (organization_id);
+
+CREATE TABLE IF NOT EXISTS soc2_connection_sync_runs (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id  uuid NOT NULL,
+  provider         text NOT NULL,
+  status           text NOT NULL DEFAULT 'queued',
+  started_at       timestamptz,
+  finished_at      timestamptz,
+  created_at       timestamptz NOT NULL DEFAULT now(),
+  updated_at       timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_soc2_connection_sync_runs_org
+  ON soc2_connection_sync_runs (organization_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_soc2_connection_sync_runs_provider
+  ON soc2_connection_sync_runs (organization_id, provider, created_at DESC);
+`;
