@@ -342,3 +342,44 @@ CREATE INDEX IF NOT EXISTS idx_soc2_policy_approvals_policy
 CREATE INDEX IF NOT EXISTS idx_soc2_policy_approvals_org
   ON soc2_policy_approvals (organization_id, created_at DESC);
 `;
+
+/**
+ * Policy Review & Sign-off Gate (F1-008).
+ *
+ * The hard human-in-loop checkpoint the liability_assessor demands ("final
+ * review and sign-off on any policy document before submission to a SOC 2
+ * auditor"). apps/web/lib/soc2/approvals.ts owns the status machine
+ * draft → in_review → approved → superseded and enforces server-side that the
+ * approver (a) holds an owner/admin role via @nexus/organizations-and-teams,
+ * (b) is NOT the user who triggered the draft, and (c) has ticked the
+ * AI-content disclaimer acknowledgment for that exact version hash.
+ *
+ * `soc2_policy_review_assignments` persists the reviewer-assignment picker on
+ * /policies/[id]/review: one row per (policy, version, reviewer) assignment, so
+ * the review page can show the current assignee and who assigned them. The row
+ * is organization_id-scoped like every other domain table.
+ *
+ * No CHECK constraints on free-form text columns (per task constraints); the
+ * status vocabulary (assigned / approved / changes_requested) is enforced in
+ * application code (apps/web/lib/soc2/approvals.ts).
+ */
+export const SOC2_POLICY_REVIEW_DDL = `
+CREATE TABLE IF NOT EXISTS soc2_policy_review_assignments (
+  id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id    uuid NOT NULL,
+  policy_id          uuid NOT NULL,
+  version_id         uuid NOT NULL,
+  version_hash       text NOT NULL,
+  reviewer_user_id   uuid NOT NULL,
+  reviewer_email     text,
+  status             text NOT NULL DEFAULT 'assigned',
+  assigned_by        uuid,
+  assigned_by_email  text,
+  note               text NOT NULL DEFAULT '',
+  created_at         timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_soc2_policy_review_assignments_version
+  ON soc2_policy_review_assignments (version_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_soc2_policy_review_assignments_org
+  ON soc2_policy_review_assignments (organization_id, policy_id, created_at DESC);
+`;
