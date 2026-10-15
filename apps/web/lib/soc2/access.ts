@@ -346,45 +346,28 @@ export function formatRelativeTime(iso: string | null): string {
   const diffMs = Date.now() - then;
   const mins = Math.floor(diffMs / 60000);
   if (mins < 1) return "just now";
-  if (mins < 60) return `${mins} min ago`;
+  if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"} ago`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours} hr ago`;
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
   const days = Math.floor(hours / 24);
   return `${days} day${days === 1 ? "" : "s"} ago`;
 }
 
-/**
- * Plan-based access predicate for free-tier gating.
- * Reads org billing rows best-effort and defaults to "free" when unknown.
- */
 export async function getSoc2PlanTier(organizationId: string): Promise<Soc2PlanTier> {
   const db = buildDb();
-  try {
-    const rows = await db.query<BillingPlanRow>(
-      `SELECT plan_key, status
-         FROM billing_subscriptions
-        WHERE organization_id = $1::uuid
-        ORDER BY created_at DESC
-        LIMIT 1`,
-      organizationId,
-    );
-    const row = rows[0];
-    if (!row) return "free";
-    const status = String(row.status ?? "").toLowerCase();
-    const key = String(row.plan_key ?? "").toLowerCase();
-    const active = status === "active" || status === "trialing";
-    if (!active) return "free";
-    if (key.includes("free")) return "free";
-    return "paid";
-  } catch (err) {
-    console.error(
-      JSON.stringify({ level: "error", scope: "soc2.access", msg: "billing_plan_lookup_failed", error: String(err) }),
-    );
-    return "free";
-  }
-}
-
-export async function canAccessFullSoc2(organizationId: string): Promise<boolean> {
-  const tier = await getSoc2PlanTier(organizationId);
-  return tier === "paid";
+  const rows = await db.query<BillingPlanRow>(
+    `SELECT plan_key, status
+       FROM billing_subscriptions
+      WHERE organization_id = $1::uuid
+      ORDER BY created_at DESC
+      LIMIT 1`,
+    organizationId,
+  );
+  const row = rows[0];
+  if (!row) return "free";
+  const plan = (row.plan_key ?? "").toLowerCase();
+  const status = (row.status ?? "").toLowerCase();
+  if (!status || status === "canceled" || status === "incomplete_expired") return "free";
+  if (plan.includes("free") || plan.includes("trial")) return "free";
+  return "paid";
 }

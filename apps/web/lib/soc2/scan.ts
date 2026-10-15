@@ -1,187 +1,271 @@
+import { trackServerEvent } from "@nexus/analytics-and-telemetry";
 import { buildDb } from "@/lib/db";
-import { trackEvent } from "@nexus/analytics-and-telemetry";
-import { getConnection, listConnections, resolveOrgContext, type Soc2Provider } from "@/lib/soc2/access";
+import {
+  getConnection,
+  type ConnectionStatus,
+  type OrgContext,
+  type Soc2PlanTier,
+} from "@/lib/soc2/access";
+
+export type ScanStep = "aws" | "github" | "running" | "ready";
 
 export interface ScanSession {
   id: string;
   organization_id: string;
-  created_by: string;
-  consultant_quote_amount: number | null;
-  consultant_quote_currency: string | null;
-  auditor_selected: boolean | null;
-  status: string;
-  started_at: string;
-  report_due_at: string;
-  report_ready_at: string | null;
-  findings_total: number | null;
-  findings_visible: number | null;
+  created_by: string | null;
+  consultant_quote_usd: number | null;
+  auditor_chosen: boolean | null;
+  commitment_due_at: string;
   created_at: string;
   updated_at: string;
 }
 
-export interface ScanStatus {
-  session: ScanSession;
-  awsConnected: boolean;
-  githubConnected: boolean;
-  progressPercent: number;
-  step: 1 | 2 | 3;
-  findingsTotal: number;
-  findingsVisible: number;
+export interface ConnectionSyncRun {
+  id: string;
+  organization_id: string;
+  provider: "aws" | "github";
+  status: "queued" | "running" | "succeeded" | "failed";
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
-function normalizeSession(row: Record<string, unknown>): ScanSession {
+export interface ScanProgress {
+  step: ScanStep;
+  awsStatus: ConnectionStatus;
+  githubStatus: ConnectionStatus;
+  totalRuns: number;
+  completedRuns: number;
+  failedRuns: number;
+  percent: number;
+  commitmentDueAt: string;
+  reportReady: boolean;
+  findingsCount: number;
+  topFindingsCount: number;
+  hiddenFindingsCount: number;
+  consultantQuoteUsd: number | null;
+  estimatedConsultantDeltaUsd: number | null;
+  auditorChosen: boolean | null;
+  planTier: Soc2PlanTier;
+}
+
+interface SessionRow {
+  id: string;
+  organization_id: string;
+  created_by: string | null;
+  consultant_quote_usd: string | number | null;
+  auditor_chosen: boolean | null;
+  commitment_due_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface CountRow {
+  count: string | number;
+}
+
+function parseNumber(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function normalizeSession(row: SessionRow): ScanSession {
   return {
-    id: String(row.id),
-    organization_id: String(row.organization_id),
-    created_by: String(row.created_by),
-    consultant_quote_amount:
-      row.consultant_quote_amount === null || row.consultant_quote_amount === undefined
-        ? null
-        : Number(row.consultant_quote_amount),
-    consultant_quote_currency: (row.consultant_quote_currency as string | null) ?? null,
-    auditor_selected:
-      row.auditor_selected === null || row.auditor_selected === undefined ? null : Boolean(row.auditor_selected),
-    status: String(row.status ?? "in_progress"),
-    started_at: String(row.started_at),
-    report_due_at: String(row.report_due_at),
-    report_ready_at: (row.report_ready_at as string | null) ?? null,
-    findings_total: row.findings_total === null || row.findings_total === undefined ? null : Number(row.findings_total),
-    findings_visible:
-      row.findings_visible === null || row.findings_visible === undefined ? null : Number(row.findings_visible),
-    created_at: String(row.created_at),
-    updated_at: String(row.updated_at),
+    id: row.id,
+    organization_id: row.organization_id,
+    created_by: row.created_by,
+    consultant_quote_usd: parseNumber(row.consultant_quote_usd),
+    auditor_chosen: row.auditor_chosen,
+    commitment_due_at: row.commitment_due_at,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
   };
 }
 
-export async function startOrGetActiveScanSession(input: {
-  organizationId: string;
-  userId: string;
-  consultantQuoteAmount?: number | null;
-  consultantQuoteCurrency?: string | null;
-  auditorSelected?: boolean | null;
-}): Promise<ScanSession> {
+export async function getPlanTierForOrg(organizationId: string): Promise<Soc2PlanTier> {
   const db = buildDb();
-  const existing = await db.query<Record<string, unknown>>(
-    `SELECT *
-       FROM soc2_scan_sessions
-      WHERE organization_id = $1::uuid
-        AND status IN ('in_progress', 'report_ready')
-      ORDER BY created_at DESC
-      LIMIT 1`,
-    input.organizationId,
-  );
-
-  if (existing[0]) {
-    return normalizeSession(existing[0]);
-  }
-
-  const rows = await db.query<Record<string, unknown>>(
-    `INSERT INTO soc2_scan_sessions
-      (organization_id, created_by, consultant_quote_amount, consultant_quote_currency, auditor_selected,
-       status, started_at, report_due_at, findings_visible)
-     VALUES ($1::uuid, $2::uuid, $3, $4, $5, 'in_progress', now(), now() + interval '24 hours', 5)
-     RETURNING *`,
-    input.organizationId,
-    input.userId,
-    input.consultantQuoteAmount ?? null,
-    input.consultantQuoteCurrency ?? null,
-    input.auditorSelected ?? null,
-  );
-  return normalizeSession(rows[0]);
-}
-
-export async function updateScanSessionResearch(input: {
-  sessionId: string;
-  consultantQuoteAmount?: number | null;
-  consultantQuoteCurrency?: string | null;
-  auditorSelected?: boolean | null;
-}): Promise<void> {
-  const db = buildDb();
-  await db.execute(
-    `UPDATE soc2_scan_sessions
-        SET consultant_quote_amount = COALESCE($2, consultant_quote_amount),
-            consultant_quote_currency = COALESCE($3, consultant_quote_currency),
-            auditor_selected = COALESCE($4, auditor_selected),
-            updated_at = now()
-      WHERE id = $1::uuid`,
-    input.sessionId,
-    input.consultantQuoteAmount ?? null,
-    input.consultantQuoteCurrency ?? null,
-    input.auditorSelected ?? null,
-  );
-}
-
-export async function markReportReady(input: {
-  organizationId: string;
-  findingsTotal: number;
-  findingsVisible: number;
-}): Promise<void> {
-  const db = buildDb();
-  await db.execute(
-    `UPDATE soc2_scan_sessions
-        SET status = 'report_ready',
-            report_ready_at = now(),
-            findings_total = $2,
-            findings_visible = $3,
-            updated_at = now()
-      WHERE organization_id = $1::uuid
-        AND status = 'in_progress'`,
-    input.organizationId,
-    input.findingsTotal,
-    input.findingsVisible,
-  );
-}
-
-export async function getLatestScanStatus(organizationId: string): Promise<ScanStatus | null> {
-  const db = buildDb();
-  const rows = await db.query<Record<string, unknown>>(
-    `SELECT *
-       FROM soc2_scan_sessions
+  const rows = await db.query<{ plan_key: string | null; status: string | null }>(
+    `SELECT plan_key, status
+       FROM billing_subscriptions
       WHERE organization_id = $1::uuid
       ORDER BY created_at DESC
       LIMIT 1`,
     organizationId,
   );
   const row = rows[0];
-  if (!row) return null;
-  const session = normalizeSession(row);
-  const map = await listConnections(organizationId);
-  const awsConnected = map.get("aws")?.status === "healthy";
-  const githubConnected = map.get("github")?.status === "healthy";
-
-  let progressPercent = 15;
-  if (awsConnected) progressPercent = 45;
-  if (awsConnected && githubConnected) progressPercent = 80;
-  if (session.status === "report_ready") progressPercent = 100;
-
-  const step: 1 | 2 | 3 = !awsConnected ? 1 : !githubConnected ? 2 : 3;
-  return {
-    session,
-    awsConnected,
-    githubConnected,
-    progressPercent,
-    step,
-    findingsTotal: session.findings_total ?? 0,
-    findingsVisible: session.findings_visible ?? 5,
-  };
+  if (!row) return "free";
+  const plan = (row.plan_key ?? "").toLowerCase();
+  const status = (row.status ?? "").toLowerCase();
+  if (!status || status === "canceled" || status === "incomplete_expired") return "free";
+  if (plan.includes("free") || plan.includes("trial")) return "free";
+  return "paid";
 }
 
-export async function emitScanEvent(event: "scan_started" | "aws_connected" | "github_connected" | "report_ready" | "upgraded", properties: Record<string, unknown>): Promise<void> {
-  try {
-    await trackEvent({ event, properties });
-  } catch (err) {
-    console.error(JSON.stringify({ level: "error", scope: "soc2.scan", msg: "track_event_failed", event, error: String(err) }));
+export async function upsertScanSession(
+  ctx: OrgContext,
+  input: { consultantQuoteUsd?: number | null; auditorChosen?: boolean | null },
+): Promise<ScanSession> {
+  const db = buildDb();
+
+  const now = new Date();
+  const due = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+  const rows = await db.query<SessionRow>(
+    `INSERT INTO soc2_scan_sessions
+      (organization_id, created_by, consultant_quote_usd, auditor_chosen, commitment_due_at, created_at, updated_at)
+     VALUES ($1::uuid, $2::uuid, $3, $4, $5, now(), now())
+     ON CONFLICT (organization_id) DO UPDATE SET
+      consultant_quote_usd = COALESCE(EXCLUDED.consultant_quote_usd, soc2_scan_sessions.consultant_quote_usd),
+      auditor_chosen = COALESCE(EXCLUDED.auditor_chosen, soc2_scan_sessions.auditor_chosen),
+      updated_at = now()
+     RETURNING *`,
+    ctx.orgId,
+    ctx.user.id,
+    input.consultantQuoteUsd ?? null,
+    input.auditorChosen ?? null,
+    due.toISOString(),
+  );
+
+  await trackServerEvent({
+    event: "scan_started",
+    userId: ctx.user.id,
+    organizationId: ctx.orgId,
+    properties: {
+      consultant_quote_usd: input.consultantQuoteUsd ?? null,
+      auditor_chosen: input.auditorChosen ?? null,
+    },
+  });
+
+  return normalizeSession(rows[0]);
+}
+
+export async function ensureConnectionRun(
+  organizationId: string,
+  provider: "aws" | "github",
+): Promise<void> {
+  const db = buildDb();
+  const existing = await db.query<ConnectionSyncRun>(
+    `SELECT * FROM soc2_connection_sync_runs
+      WHERE organization_id = $1::uuid AND provider = $2
+      ORDER BY created_at DESC
+      LIMIT 1`,
+    organizationId,
+    provider,
+  );
+  const latest = existing[0];
+  if (latest && (latest.status === "queued" || latest.status === "running" || latest.status === "succeeded")) {
+    return;
   }
+
+  await db.execute(
+    `INSERT INTO soc2_connection_sync_runs
+      (organization_id, provider, status, started_at, finished_at, created_at, updated_at)
+     VALUES ($1::uuid, $2, 'queued', NULL, NULL, now(), now())`,
+    organizationId,
+    provider,
+  );
 }
 
-export async function maybeEmitConnectionEvent(provider: Soc2Provider): Promise<void> {
-  const ctx = await resolveOrgContext();
-  if (!ctx) return;
-  const conn = await getConnection(ctx.orgId, provider);
-  if (conn?.status === "healthy") {
-    await emitScanEvent(provider === "aws" ? "aws_connected" : "github_connected", {
-      organization_id: ctx.orgId,
-      provider,
+async function getFindingsCount(organizationId: string): Promise<number> {
+  const db = buildDb();
+  const rows = await db.query<CountRow>(
+    `SELECT COUNT(*)::bigint AS count
+       FROM soc2_control_evidence
+      WHERE organization_id = $1::uuid
+        AND status IN ('gap', 'needs_human_review')`,
+    organizationId,
+  );
+  return Number(rows[0]?.count ?? 0);
+}
+
+export async function getLatestSession(organizationId: string): Promise<ScanSession | null> {
+  const db = buildDb();
+  const rows = await db.query<SessionRow>(
+    `SELECT *
+       FROM soc2_scan_sessions
+      WHERE organization_id = $1::uuid
+      LIMIT 1`,
+    organizationId,
+  );
+  return rows[0] ? normalizeSession(rows[0]) : null;
+}
+
+export async function getScanProgress(ctx: OrgContext): Promise<ScanProgress> {
+  const [aws, github, session, planTier] = await Promise.all([
+    getConnection(ctx.orgId, "aws"),
+    getConnection(ctx.orgId, "github"),
+    getLatestSession(ctx.orgId),
+    getPlanTierForOrg(ctx.orgId),
+  ]);
+
+  if (aws?.status === "healthy") {
+    await ensureConnectionRun(ctx.orgId, "aws");
+  }
+  if (github?.status === "healthy") {
+    await ensureConnectionRun(ctx.orgId, "github");
+  }
+
+  const db = buildDb();
+  const runs = await db.query<ConnectionSyncRun>(
+    `SELECT *
+       FROM soc2_connection_sync_runs
+      WHERE organization_id = $1::uuid
+      ORDER BY created_at DESC`,
+    ctx.orgId,
+  );
+
+  const totalRuns = runs.length;
+  const completedRuns = runs.filter((r) => r.status === "succeeded").length;
+  const failedRuns = runs.filter((r) => r.status === "failed").length;
+
+  const findingsCount = await getFindingsCount(ctx.orgId);
+  const topFindingsCount = planTier === "free" ? Math.min(5, findingsCount) : findingsCount;
+  const hiddenFindingsCount = Math.max(0, findingsCount - topFindingsCount);
+
+  const reportReady = completedRuns >= 2 && totalRuns >= 2;
+  let step: ScanStep = "aws";
+  if ((aws?.status ?? "not_connected") === "healthy") step = "github";
+  if ((aws?.status ?? "not_connected") === "healthy" && (github?.status ?? "not_connected") === "healthy") {
+    step = "running";
+  }
+  if (reportReady) step = "ready";
+
+  const percentBase = Math.round(
+    ((aws?.status === "healthy" ? 1 : 0) + (github?.status === "healthy" ? 1 : 0)) * 35,
+  );
+  const runPercent = totalRuns > 0 ? Math.round((completedRuns / Math.max(totalRuns, 1)) * 30) : 0;
+  const percent = reportReady ? 100 : Math.min(95, percentBase + runPercent);
+
+  if (reportReady) {
+    await trackServerEvent({
+      event: "report_ready",
+      userId: ctx.user.id,
+      organizationId: ctx.orgId,
+      properties: { findings_count: findingsCount, plan_tier: planTier },
     });
   }
+
+  const quote = session?.consultant_quote_usd ?? null;
+  const estimatedConsultantDeltaUsd = quote !== null ? Math.max(0, Math.round(quote - 2400)) : null;
+
+  return {
+    step,
+    awsStatus: aws?.status ?? "not_connected",
+    githubStatus: github?.status ?? "not_connected",
+    totalRuns,
+    completedRuns,
+    failedRuns,
+    percent,
+    commitmentDueAt: session?.commitment_due_at ?? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    reportReady,
+    findingsCount,
+    topFindingsCount,
+    hiddenFindingsCount,
+    consultantQuoteUsd: quote,
+    estimatedConsultantDeltaUsd,
+    auditorChosen: session?.auditor_chosen ?? null,
+    planTier,
+  };
 }
